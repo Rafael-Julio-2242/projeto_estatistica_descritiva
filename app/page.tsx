@@ -4,6 +4,9 @@ import * as XLSX from 'xlsx'
 import { Button } from '@/components/ui/button'
 import { JsonToDataArray } from '@/helpers/json-convertions'
 import { InitialTreatment } from '@/server/data-analisys/initial-treatment'
+import { ExtractColumnFromData } from '@/helpers/extract-data'
+import CalculateColumnFrequencies from '@/server/data-analisys/frequencies'
+import CalculateCentralTrends from '@/server/data-analisys/central-trends'
 
 export default function Home() {
 
@@ -31,6 +34,23 @@ export default function Home() {
 
     console.log('CLEANED DATA: ', cleanedData)
     console.log('COLUMN TYPES: ', columnTypes)
+
+
+    console.log('[---------------------------------]');
+    console.log('[CALCULATING FREQUENCIES]: ');
+
+    const chosenTestHeader = "IMDb Rating"
+    const columnData = ExtractColumnFromData(cleanedData, chosenTestHeader)
+    const frequencies = CalculateColumnFrequencies(columnData)
+    console.log(`Frequencies - ${chosenTestHeader}: ${JSON.stringify(frequencies, null, 2)}`)
+
+
+    console.log('[---------------------------------]');
+    console.log('[CALCULATING CENTRAL TRENDS]');
+    const centralTrends = CalculateCentralTrends(columnData)
+    console.log(`Central Trends - ${chosenTestHeader}: ${JSON.stringify(centralTrends, null, 2)}`)
+
+    console.log('[---------------------------------]');
 
   }
 
