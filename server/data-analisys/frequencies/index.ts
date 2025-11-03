@@ -1,4 +1,3 @@
-import { ColumnType } from "../initial-treatment/define-columns-types";
 
 export enum Frequency {
     ABSOLUTE = "Frequência Absoluta",

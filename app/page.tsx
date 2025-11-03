@@ -7,6 +7,7 @@ import { InitialTreatment } from '@/server/data-analisys/initial-treatment'
 import { ExtractColumnFromData } from '@/helpers/extract-data'
 import CalculateColumnFrequencies from '@/server/data-analisys/frequencies'
 import CalculateCentralTrends from '@/server/data-analisys/central-trends'
+import CalculateQuantiles from '@/server/data-analisys/quantiles'
 
 export default function Home() {
 
@@ -51,6 +52,13 @@ export default function Home() {
     console.log(`Central Trends - ${chosenTestHeader}: ${JSON.stringify(centralTrends, null, 2)}`)
 
     console.log('[---------------------------------]');
+    console.log('[CALCULATING QUANTILES]');
+    const quantiles = CalculateQuantiles(columnData)
+    console.log(`Quantiles - ${chosenTestHeader}: ${JSON.stringify(quantiles, null, 2)}`)
+
+
+    console.log('[---------------------------------]');
+
 
   }
 
