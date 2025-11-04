@@ -8,6 +8,7 @@ import { ExtractColumnFromData } from '@/helpers/extract-data'
 import CalculateColumnFrequencies from '@/server/data-analisys/frequencies'
 import CalculateCentralTrends from '@/server/data-analisys/central-trends'
 import CalculateQuantiles from '@/server/data-analisys/quantiles'
+import CalculateDispersion from '@/server/data-analisys/dispersion'
 
 export default function Home() {
 
@@ -58,6 +59,14 @@ export default function Home() {
 
 
     console.log('[---------------------------------]');
+    console.log('[CALCULATING DISPERSION]');
+    const dispersion = CalculateDispersion(columnData)
+    console.log(`Dispersion - ${chosenTestHeader}: ${JSON.stringify(dispersion, null, 2)}`)
+
+
+    console.log('[---------------------------------]');
+
+
 
 
   }

@@ -54,7 +54,6 @@ export default function CalculateCentralTrends(inputData: any[]) {
     for (let i = 0; i < modeMapKeys.length; i++) {
         const value = modeMapKeys[i];
         const valueCount = value[1];
-        console.log('[VALUE]: ', value[0], " - [COUNT]: ", valueCount, " - [MODE COUNT]: ", modeCount, " - [MODE]: ", mode);
         if (valueCount > modeCount) {
             mode = Number(value[0]);
             modeCount = valueCount;

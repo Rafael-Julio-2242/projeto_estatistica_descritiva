@@ -17,6 +17,9 @@ export default function CalculateQuantiles(inputData: number[]) {
 
   const median = totalValues % 2 === 0 ? (data[totalValues / 2 - 1] + data[totalValues / 2]) / 2 : data[Math.floor(totalValues / 2)];
 
+  const thirdQuartile = 
+
+
   // Calculando os Quartis
   quantiles.push(
     {
