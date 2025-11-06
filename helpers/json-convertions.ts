@@ -38,3 +38,21 @@ export function JsonToDataArray(json: any[]) {
 
     return data
 }
+
+export function DataArrayToJson(data: any[][]) {
+    if (!data || data.length === 0) return []
+
+    const [headers, ...rows] = data
+    const out: Record<string, any>[] = []
+
+    for (const row of rows) {
+        const obj: Record<string, any> = {}
+        for (let i = 0; i < headers.length; i++) {
+            const key = headers[i]
+            obj[key] = row[i]
+        }
+        out.push(obj)
+    }
+
+    return out
+}
