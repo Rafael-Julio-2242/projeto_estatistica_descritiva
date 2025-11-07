@@ -38,7 +38,7 @@ export function JsonToDataArray(json: any[]) {
 
     return data
 }
-
+// func que transforma um array de arrays em um array de objetos(JSON)
 export function DataArrayToJson(data: any[][]) {
     if (!data || data.length === 0) return []
 

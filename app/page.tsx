@@ -63,6 +63,15 @@ export default function Home() {
   const [tableColumns, setTableColumns] = useState<GeneratedColumn[] | null>(null)
   const [tableRows, setTableRows] = useState<Record<string, any>[]>([])
 
+  // Paginação
+  const rowsPerPage = 10
+  const [currentPage, setCurrentPage] = useState(0)
+  const totalPages = Math.max(1, Math.ceil(tableRows.length / rowsPerPage))
+  const paginatedRows = tableRows.slice(
+    currentPage * rowsPerPage,
+    (currentPage + 1) * rowsPerPage
+  )
+
 
   async function onSubmit(formData: FormData) {
     setIsLoading(true)
@@ -103,9 +112,11 @@ export default function Home() {
 
       setTableColumns(generatedCols)
       setTableRows(rows)
+      setCurrentPage(0)
     } else {
       setTableColumns(null)
       setTableRows([])
+      setCurrentPage(0)
     }
 
 
@@ -217,6 +228,27 @@ export default function Home() {
                         </TableBody>
                     </Table>
                 </div>
+                <div className="flex items-center justify-between mt-2">
+                  <span className="text-sm text-muted-foreground">Página {currentPage + 1} de {totalPages}</span>
+                  <div className="space-x-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
+                      disabled={currentPage <= 0}
+                    >
+                      Anterior
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage((p) => Math.min(totalPages - 1, p + 1))}
+                      disabled={currentPage >= totalPages - 1}
+                    >
+                      Próxima
+                    </Button>
+                  </div>
+                </div>
               </TabsContent>
 
               <TabsContent value="data">
@@ -230,7 +262,7 @@ export default function Home() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {tableRows.map((row, rIdx) => (
+                      {paginatedRows.map((row, rIdx) => (
                         <TableRow key={rIdx}>
                           {(tableColumns ?? []).map((col) => (
                             <TableCell key={col.accessorKey}>
@@ -241,6 +273,27 @@ export default function Home() {
                       ))}
                     </TableBody>
                   </Table>
+                </div>
+                <div className="flex items-center justify-between mt-2">
+                  <span className="text-sm text-muted-foreground">Página {currentPage + 1} de {totalPages}</span>
+                  <div className="space-x-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
+                      disabled={currentPage <= 0}
+                    >
+                      Anterior
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage((p) => Math.min(totalPages - 1, p + 1))}
+                      disabled={currentPage >= totalPages - 1}
+                    >
+                      Próxima
+                    </Button>
+                  </div>
                 </div>
               </TabsContent>
 
