@@ -11,6 +11,8 @@ import CalculateColumnFrequencies from '@/server/data-analisys/frequencies'
 import CalculateCentralTrends from '@/server/data-analisys/central-trends'
 import CalculateQuantiles from '@/server/data-analisys/quantiles'
 import CalculateDispersion from '@/server/data-analisys/dispersion'
+import type { ColumnFrequencyValue } from '@/server/data-analisys/frequencies'
+import type { Quantile } from '@/server/data-analisys/quantiles'
 
 // --- Imports de UI ---
 import { Input } from '@/components/ui/input'
@@ -63,6 +65,15 @@ export default function Home() {
   const [tableColumns, setTableColumns] = useState<GeneratedColumn[] | null>(null)
   const [tableRows, setTableRows] = useState<Record<string, any>[]>([])
 
+  const [headersList, setHeadersList] = useState<string[] | null>(null)
+  const [cleanedMatrix, setCleanedMatrix] = useState<any[] | null>(null)
+  const [selectedColumn, setSelectedColumn] = useState<string | null>(null)
+
+  const [frequenciesResult, setFrequenciesResult] = useState<ColumnFrequencyValue[] | null>(null)
+  const [centralTrendsResult, setCentralTrendsResult] = useState<{ mean: number; median: number; mode: number; modeCount: number } | null>(null)
+  const [quantilesResult, setQuantilesResult] = useState<Quantile[] | null>(null)
+  const [dispersionResult, setDispersionResult] = useState<any | null>(null)
+
   // Paginação
   const rowsPerPage = 10
   const [currentPage, setCurrentPage] = useState(0)
@@ -76,6 +87,10 @@ export default function Home() {
   async function onSubmit(formData: FormData) {
     setIsLoading(true)
     setResults(null)
+    setFrequenciesResult(null)
+    setCentralTrendsResult(null)
+    setQuantilesResult(null)
+    setDispersionResult(null)
 
     const formDataFile = formData.get('csvFile')
 
@@ -112,49 +127,67 @@ export default function Home() {
 
       setTableColumns(generatedCols)
       setTableRows(rows)
+      setHeadersList(headers)
+      setCleanedMatrix(cleanedData)
+      const defaultHeader = headers.includes('IMDb Rating') ? 'IMDb Rating' : headers[0]
+      setSelectedColumn(defaultHeader)
+      computeStatsFor(defaultHeader, cleanedData)
       setCurrentPage(0)
     } else {
       setTableColumns(null)
       setTableRows([])
+      setHeadersList(null)
+      setCleanedMatrix(null)
+      setSelectedColumn(null)
+      setFrequenciesResult(null)
+      setCentralTrendsResult(null)
+      setQuantilesResult(null)
+      setDispersionResult(null)
       setCurrentPage(0)
     }
 
-
-    console.log('[---------------------------------]');
-    console.log('[CALCULATING FREQUENCIES]: ');
-
-    const chosenTestHeader = "IMDb Rating"
-    const columnData = ExtractColumnFromData(cleanedData, chosenTestHeader)
-    const frequencies = CalculateColumnFrequencies(columnData)
-    console.log(`Frequencies - ${chosenTestHeader}: ${JSON.stringify(frequencies, null, 2)}`)
-
-
-    console.log('[---------------------------------]');
-    console.log('[CALCULATING CENTRAL TRENDS]');
-    const centralTrends = CalculateCentralTrends(columnData)
-    console.log(`Central Trends - ${chosenTestHeader}: ${JSON.stringify(centralTrends, null, 2)}`)
-
-    console.log('[---------------------------------]');
-    console.log('[CALCULATING QUANTILES]');
-    const quantiles = CalculateQuantiles(columnData)
-    console.log(`Quantiles - ${chosenTestHeader}: ${JSON.stringify(quantiles, null, 2)}`)
-
-
-    console.log('[---------------------------------]');
-    console.log('[CALCULATING DISPERSION]');
-    const dispersion = CalculateDispersion(columnData)
-    console.log(`Dispersion - ${chosenTestHeader}: ${JSON.stringify(dispersion, null, 2)}`)
-
-
-    console.log('[---------------------------------]');
-
     console.log('cleanedData: ', cleanedData); 
-    
-    // Salva 'columnTypes' no estado
-    // Garantimos que 'columnTypes' seja um array de ColumnType, se não for, usamos um array vazio
     setResults(columnTypes as ColumnType[] || [])
 
     setIsLoading(false)
+  }
+
+  function computeStatsFor(columnName: string, matrix?: any[]) {
+    const dataMatrix = matrix ?? cleanedMatrix
+    if (!dataMatrix) return
+
+    const fullColumn = ExtractColumnFromData(dataMatrix, columnName)
+    const values = fullColumn.slice(1)
+    const isNumeric = values.length > 0 && !isNaN(Number(values[0]))
+
+    // Frequências sempre são calculadas
+    const frequencies = CalculateColumnFrequencies([...fullColumn])
+    setFrequenciesResult(frequencies)
+
+    if (isNumeric) {
+      const numericValues = values.map((v: any) => Number(v))
+      const central = CalculateCentralTrends(numericValues)
+      setCentralTrendsResult(central)
+      const quant = CalculateQuantiles(numericValues)
+      setQuantilesResult(quant)
+      const disp = CalculateDispersion(numericValues)
+      setDispersionResult(disp)
+    } else {
+      // Para variáveis não numéricas, não calcular quantis/disp.
+      setQuantilesResult(null)
+      setDispersionResult(null)
+      // Para tendências centrais, evitamos NaN; exibiremos apenas moda via frequências na UI (com fallback '-')
+      setCentralTrendsResult({ mean: Number.NaN, median: Number.NaN, mode: Number.NaN, modeCount: (frequencies.sort((a,b)=>b.absoluteFrequency-a.absoluteFrequency)[0]?.absoluteFrequency) ?? 0 })
+    }
+  }
+
+  function handleChangeColumn(col: string) {
+    setSelectedColumn(col)
+    computeStatsFor(col)
+  }
+
+  function fmt(n?: number) {
+    return typeof n === 'number' && Number.isFinite(n) ? n : '-'
   }
 
   return (
@@ -204,9 +237,10 @@ export default function Home() {
           <CardContent>
             
             <Tabs defaultValue={tableColumns ? 'data' : 'types'} className="w-full">
-              <TabsList className="grid w-full grid-cols-2">
+              <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="types">Tipos de Variáveis</TabsTrigger>
                 <TabsTrigger value="data" disabled={!tableColumns}>Tabela de Dados</TabsTrigger>
+                <TabsTrigger value="stats" disabled={!frequenciesResult && !centralTrendsResult && !quantilesResult && !dispersionResult}>Estatísticas</TabsTrigger>
               </TabsList>
 
               <TabsContent value="types">
@@ -293,6 +327,138 @@ export default function Home() {
                     >
                       Próxima
                     </Button>
+                  </div>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="stats">
+                <div className="space-y-6 mt-4">
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor="stats-column">Coluna</Label>
+                    <select
+                      id="stats-column"
+                      className="border rounded-md px-2 py-1 bg-background"
+                      value={selectedColumn ?? ''}
+                      onChange={(e) => handleChangeColumn(e.target.value)}
+                      disabled={!headersList || headersList.length === 0}
+                    >
+                      {(headersList ?? []).map((h) => (
+                        <option key={h} value={h}>{h}</option>
+                      ))}
+                    </select>
+                  </div>
+                  {/* Frequências */}
+                  <div>
+                    <h3 className="text-lg font-semibold mb-2">Frequências</h3>
+                    {!frequenciesResult || frequenciesResult.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">Nenhum resultado calculado.</p>
+                    ) : (
+                      <div className="max-h-[300px] overflow-auto rounded-md border">
+                        <Table>
+                          <TableHeader className="sticky top-0 bg-white dark:bg-gray-950 z-10">
+                            <TableRow>
+                              <TableHead>Valor</TableHead>
+                              <TableHead>Frequência Absoluta</TableHead>
+                              <TableHead>Frequência Relativa</TableHead>
+                              <TableHead>Frequência Acumulativa</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {frequenciesResult.map((f, idx) => (
+                              <TableRow key={idx}>
+                                <TableCell>{f.value}</TableCell>
+                                <TableCell>{f.absoluteFrequency}</TableCell>
+                                <TableCell>{(f.relativeFrequency * 100).toFixed(2)}%</TableCell>
+                                <TableCell>{f.absoluteCumulativeFrequency ?? '-'}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Tendências Centrais */}
+                  <div>
+                    <h3 className="text-lg font-semibold mb-2">Tendências Centrais</h3>
+                    {!centralTrendsResult ? (
+                      <p className="text-sm text-muted-foreground">Nenhum resultado calculado.</p>
+                    ) : (
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                        <div className="rounded-md border p-3"><div className="text-muted-foreground">Média</div><div className="font-medium">{fmt(centralTrendsResult.mean)}</div></div>
+                        <div className="rounded-md border p-3"><div className="text-muted-foreground">Mediana</div><div className="font-medium">{fmt(centralTrendsResult.median)}</div></div>
+                        <div className="rounded-md border p-3"><div className="text-muted-foreground">Moda</div><div className="font-medium">{fmt(centralTrendsResult.mode)}</div></div>
+                        <div className="rounded-md border p-3"><div className="text-muted-foreground">Frequência da Moda</div><div className="font-medium">{centralTrendsResult.modeCount}</div></div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Separatrizes */}
+                  <div>
+                    <h3 className="text-lg font-semibold mb-2">Separatrizes</h3>
+                    {!quantilesResult || quantilesResult.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">Nenhum resultado calculado.</p>
+                    ) : (
+                      <div className="max-h-[300px] overflow-auto rounded-md border">
+                        <Table>
+                          <TableHeader className="sticky top-0 bg-white dark:bg-gray-950 z-10">
+                            <TableRow>
+                              <TableHead>Nome</TableHead>
+                              <TableHead>Tipo</TableHead>
+                              <TableHead>Valor</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {quantilesResult.map((q, idx) => (
+                              <TableRow key={idx}>
+                                <TableCell>{q.name}</TableCell>
+                                <TableCell>{q.type}</TableCell>
+                                <TableCell>{q.value}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Dispersão */}
+                  <div>
+                    <h3 className="text-lg font-semibold mb-2">Dispersão</h3>
+                    {!dispersionResult ? (
+                      <p className="text-sm text-muted-foreground">Nenhum resultado calculado.</p>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                        <div className="rounded-md border p-3">
+                          <div className="text-muted-foreground">Contagem</div>
+                          <div className="font-medium">{dispersionResult.stats?.count}</div>
+                        </div>
+                        <div className="rounded-md border p-3">
+                          <div className="text-muted-foreground">Amplitude (mín - máx)</div>
+                          <div className="font-medium">{dispersionResult.range?.value} ({dispersionResult.range?.minValue} - {dispersionResult.range?.maxValue})</div>
+                        </div>
+                        <div className="rounded-md border p-3">
+                          <div className="text-muted-foreground">Q1 / Q3 / IQR</div>
+                          <div className="font-medium">{dispersionResult.quartiles?.q1} / {dispersionResult.quartiles?.q3} / {dispersionResult.quartiles?.iqr}</div>
+                        </div>
+                        <div className="rounded-md border p-3">
+                          <div className="text-muted-foreground">Média</div>
+                          <div className="font-medium">{dispersionResult.mean?.mean}</div>
+                        </div>
+                        <div className="rounded-md border p-3">
+                          <div className="text-muted-foreground">Variância</div>
+                          <div className="font-medium">{dispersionResult.variance?.variance}</div>
+                        </div>
+                        <div className="rounded-md border p-3">
+                          <div className="text-muted-foreground">Desvio Padrão</div>
+                          <div className="font-medium">{dispersionResult.standardDeviation?.standardDeviation}</div>
+                        </div>
+                        <div className="rounded-md border p-3">
+                          <div className="text-muted-foreground">Coeficiente de Variação</div>
+                          <div className="font-medium">{dispersionResult.coefficientOfVariation?.coefficientOfVariation ?? '-'}</div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </TabsContent>
