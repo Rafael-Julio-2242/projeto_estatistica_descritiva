@@ -32,6 +32,8 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs"
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart'
+import { BarChart as RBarChart, Bar, CartesianGrid, XAxis, YAxis, ComposedChart, ReferenceArea, ReferenceLine, Scatter } from 'recharts'
 
 // --- NOVOS IMPORTS DA TABELA ---
 import {
@@ -230,129 +232,75 @@ export default function Home() {
   }
 
   function CategoricalBarChart({ data }: { data: { label: string; value: number }[] }) {
-    const max = Math.max(1, ...data.map((d) => d.value));
-    const total = data.reduce((a, b) => a + b.value, 0);
+    const total = data.reduce((a, b) => a + b.value, 0)
+    const chartConfig = { value: { label: 'Frequência', color: 'hsl(var(--primary))' } }
     return (
-      <div className="w-full overflow-x-auto">
-        <div className="flex items-end gap-2 h-64 border rounded-md p-2 bg-background min-w-fit">
-          {data.map((d, i) => (
-            <div key={i} className="w-8 sm:w-10 md:w-12 h-full flex flex-col items-center gap-1">
-              <div className="w-full flex-1 flex items-end">
-                <div
-                  className="w-full bg-primary/70 rounded-t"
-                  style={{ height: `${(d.value / max) * 100}%`, minHeight: d.value > 0 ? '4px' : 0 }}
-                  title={`${d.label}: ${d.value}`}
-                />
-              </div>
-              <div className="text-xs text-center truncate w-full" title={d.label}>{d.label}</div>
-              <div className="text-[10px] text-muted-foreground">{total ? ((d.value / total) * 100).toFixed(1) + '%': '0%'}</div>
-            </div>
-          ))}
-        </div>
+      <div className="w-full">
+        <ChartContainer config={chartConfig} className="h-64 w-full">
+          <RBarChart data={data} barCategoryGap={8} margin={{ top: 8, right: 16, left: 8, bottom: 8 }}>
+            <CartesianGrid vertical={false} strokeDasharray="3 3" />
+            <XAxis dataKey="label" tick={{ fontSize: 10 }} interval={0} height={40} angle={0} dx={0} dy={0} tickLine={false} axisLine={false} />
+            <YAxis allowDecimals tickLine={false} axisLine={false} width={32} />
+            <ChartTooltip content={<ChartTooltipContent />} />
+            <Bar dataKey="value" fill="var(--color-value)" />
+          </RBarChart>
+        </ChartContainer>
+        <div className="mt-1 text-[10px] text-muted-foreground">Total: {total}</div>
       </div>
-    );
+    )
   }
 
   function NumericHistogram({ values }: { values: number[] }) {
-    const bins = binNumeric(values, 10);
-    const max = Math.max(1, ...bins.map((b) => b.count));
+    const bins = binNumeric(values, 10)
+    const data = bins.map(b => ({ label: `${b.x0.toFixed(1)}–${b.x1.toFixed(1)}`, count: b.count }))
+    const chartConfig = { count: { label: 'Contagem', color: 'hsl(var(--primary))' } }
     return (
-      <div className="w-full">
-        <div className="flex items-end gap-2 h-64 border rounded-md p-2 bg-background">
-          {bins.map((b, i) => (
-            <div key={i} className="flex-1 flex flex-col items-center justify-end gap-1">
-              <div
-                className="w-full bg-blue-500/70 rounded-t"
-                style={{ height: `${(b.count / max) * 100}%` }}
-                title={`${b.x0.toFixed(2)} - ${b.x1.toFixed(2)}: ${b.count}`}
-              />
-              <div className="text-[10px] text-muted-foreground">{b.x0.toFixed(1)}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
+      <ChartContainer config={chartConfig} className="h-64 w-full">
+        <RBarChart data={data} margin={{ top: 8, right: 16, left: 8, bottom: 8 }}>
+          <CartesianGrid vertical={false} strokeDasharray="3 3" />
+          <XAxis dataKey="label" tick={{ fontSize: 10 }} interval={0} height={40} tickLine={false} axisLine={false} />
+          <YAxis allowDecimals tickLine={false} axisLine={false} width={32} />
+          <ChartTooltip content={<ChartTooltipContent />} />
+          <Bar dataKey="count" fill="var(--color-count)" />
+        </RBarChart>
+      </ChartContainer>
+    )
   }
 
   function BoxPlot({ values, stats }: { values: number[]; stats?: { q1: number; q3: number; iqr: number; median?: number } }) {
-    if (values.length === 0) return null;
-    const sorted = [...values].sort((a, b) => a - b);
-    const dataMin = sorted[0];
-    const dataMax = sorted[sorted.length - 1];
+    if (values.length === 0) return null
+    const sorted = [...values].sort((a, b) => a - b)
+    const dataMin = sorted[0]
+    const dataMax = sorted[sorted.length - 1]
+    const q1 = stats?.q1 ?? sorted[Math.floor(sorted.length * 0.25)]
+    const q3 = stats?.q3 ?? sorted[Math.floor(sorted.length * 0.75)]
+    const iqr = stats?.iqr ?? (q3 - q1)
+    const median = stats?.median ?? sorted[Math.floor(sorted.length * 0.5)]
+    const lowerFence = q1 - 1.5 * iqr
+    const upperFence = q3 + 1.5 * iqr
+    const nonOutliers = sorted.filter((v) => v >= lowerFence && v <= upperFence)
+    const lowerWhisker = nonOutliers.length ? nonOutliers[0] : q1
+    const upperWhisker = nonOutliers.length ? nonOutliers[nonOutliers.length - 1] : q3
+    const outliers = sorted.filter((v) => v < lowerFence || v > upperFence).map((v) => ({ x: v, y: 0 }))
 
-    // Prefer provided stats when available
-    const q1 = stats?.q1 ?? sorted[Math.floor(sorted.length * 0.25)];
-    const q3 = stats?.q3 ?? sorted[Math.floor(sorted.length * 0.75)];
-    const iqr = stats?.iqr ?? (q3 - q1);
-    const median = stats?.median ?? sorted[Math.floor(sorted.length * 0.5)];
+    const data = [{ min: dataMin, max: dataMax, q1, q3, median, lw: lowerWhisker, uw: upperWhisker }]
 
-    // Whiskers using 1.5*IQR fences
-    const lowerFence = q1 - 1.5 * iqr;
-    const upperFence = q3 + 1.5 * iqr;
-
-    // Compute whiskers as most extreme non-outlier data points
-    const nonOutliers = sorted.filter((v) => v >= lowerFence && v <= upperFence);
-    const lowerWhisker = nonOutliers.length ? nonOutliers[0] : q1;
-    const upperWhisker = nonOutliers.length ? nonOutliers[nonOutliers.length - 1] : q3;
-
-    // Outliers
-    const lowerOutliers = sorted.filter((v) => v < lowerFence);
-    const upperOutliers = sorted.filter((v) => v > upperFence);
-
-    // Scale to full data range for context
-    const min = dataMin;
-    const max = dataMax;
-    const range = Math.max(1e-9, max - min);
-    const scale = (v: number) => ((v - min) / range) * 100;
+    const chartConfig = { box: { label: 'Boxplot', color: 'hsl(var(--primary))' } }
 
     return (
-      <div className="w-full">
-        <div className="relative h-32 border rounded-md bg-background">
-          {/* Axis line */}
-          <div className="absolute left-2 right-2 top-1/2 -translate-y-1/2 h-px bg-foreground/30" />
-
-          {/* Min / Max labels */}
-          <div className="absolute top-6 left-[2%] right-[2%] text-xs text-muted-foreground flex justify-between">
-            <span>{min.toFixed(2)}</span>
-            <span>{max.toFixed(2)}</span>
-          </div>
-
-          {/* Box + whiskers */}
-          <div className="absolute left-[2%] right-[2%] bottom-3 h-2">
-            <div className="relative h-full">
-              {/* Whiskers */}
-              <div className="absolute h-full w-px bg-foreground/60" style={{ left: `${scale(lowerWhisker)}%` }} />
-              <div className="absolute h-full w-px bg-foreground/60" style={{ left: `${scale(upperWhisker)}%` }} />
-
-              {/* Box (Q1 to Q3) */}
-              <div className="absolute h-full bg-primary/30" style={{ left: `${scale(q1)}%`, width: `${Math.max(0, scale(q3) - scale(q1))}%` }} />
-
-              {/* Median */}
-              <div className="absolute h-full w-px bg-primary" style={{ left: `${scale(median)}%` }} />
-            </div>
-          </div>
-
-          {/* Quartile labels */}
-          <div className="absolute left-[2%] right-[2%] bottom-8 text-[10px] text-muted-foreground flex justify-between">
-            <span>Q1: {q1.toFixed(2)}</span>
-            <span>Mediana: {median.toFixed(2)}</span>
-            <span>Q3: {q3.toFixed(2)}</span>
-          </div>
-
-          {/* Outliers as dots */}
-          <div className="absolute left-[2%] right-[2%] bottom-1 h-2">
-            <div className="relative h-full">
-              {lowerOutliers.map((v, i) => (
-                <div key={`lo-${i}`} className="absolute -bottom-1 translate-y-1/2 w-1.5 h-1.5 rounded-full bg-destructive" style={{ left: `${scale(v)}%` }} title={`Outlier: ${v}`} />
-              ))}
-              {upperOutliers.map((v, i) => (
-                <div key={`uo-${i}`} className="absolute -bottom-1 translate-y-1/2 w-1.5 h-1.5 rounded-full bg-destructive" style={{ left: `${scale(v)}%` }} title={`Outlier: ${v}`} />
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-    );
+      <ChartContainer config={chartConfig} className="h-48 w-full">
+        <ComposedChart data={data} margin={{ top: 8, right: 16, bottom: 8, left: 16 }}>
+          <XAxis type="number" dataKey="median" domain={[dataMin, dataMax]} tickLine={false} axisLine={false} />
+          <YAxis type="number" hide domain={[0, 1]} />
+          <ChartTooltip content={<ChartTooltipContent />} />
+          <ReferenceLine x={lowerWhisker} stroke="var(--color-box)" />
+          <ReferenceLine x={upperWhisker} stroke="var(--color-box)" />
+          <ReferenceArea x1={q1} x2={q3} fill="var(--color-box)" fillOpacity={0.3} />
+          <ReferenceLine x={median} stroke="var(--color-box)" strokeWidth={2} />
+          <Scatter data={outliers} fill="hsl(var(--destructive))" />
+        </ComposedChart>
+      </ChartContainer>
+    )
   }
 
 
