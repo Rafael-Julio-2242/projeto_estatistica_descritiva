@@ -83,6 +83,10 @@ export default function Home() {
     (currentPage + 1) * rowsPerPage
   )
 
+  // Paginação para gráficos (categóricos)
+  const chartsItemsPerPage = 10
+  const [chartsPage, setChartsPage] = useState(0)
+
 
   async function onSubmit(formData: FormData) {
     setIsLoading(true)
@@ -184,11 +188,173 @@ export default function Home() {
   function handleChangeColumn(col: string) {
     setSelectedColumn(col)
     computeStatsFor(col)
+    setChartsPage(0)
   }
 
   function fmt(n?: number) {
     return typeof n === 'number' && Number.isFinite(n) ? n : '-'
   }
+
+  function isNumericColumn(matrix: any[] | null, columnName: string | null) {
+    if (!matrix || !columnName) return false;
+    const col = ExtractColumnFromData(matrix, columnName).slice(1);
+    if (col.length === 0) return false;
+    const sample = col.find((v: any) => v !== null && v !== undefined && v !== '');
+    return sample !== undefined && !isNaN(Number(sample));
+  }
+
+  function getNumericValues(matrix: any[] | null, columnName: string | null) {
+    if (!matrix || !columnName) return [] as number[];
+    const col = ExtractColumnFromData(matrix, columnName).slice(1);
+    return col.map((v: any) => Number(v)).filter((v: number) => Number.isFinite(v));
+  }
+
+  function binNumeric(values: number[], bins = 10) {
+    if (values.length === 0) return [] as { x0: number; x1: number; count: number }[];
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const width = (max - min) / (bins || 1) || 1;
+    const edges = Array.from({ length: bins + 1 }, (_, i) => min + i * width);
+    const out: { x0: number; x1: number; count: number }[] = [];
+    for (let i = 0; i < bins; i++) {
+      out.push({ x0: edges[i], x1: i === bins - 1 ? max : edges[i + 1], count: 0 });
+    }
+    for (const v of values) {
+      if (v < min || v > max) continue;
+      let idx = Math.floor((v - min) / (width || 1));
+      if (idx >= bins) idx = bins - 1;
+      if (idx < 0) idx = 0;
+      out[idx].count += 1;
+    }
+    return out;
+  }
+
+  function CategoricalBarChart({ data }: { data: { label: string; value: number }[] }) {
+    const max = Math.max(1, ...data.map((d) => d.value));
+    const total = data.reduce((a, b) => a + b.value, 0);
+    return (
+      <div className="w-full overflow-x-auto">
+        <div className="flex items-end gap-2 h-64 border rounded-md p-2 bg-background min-w-fit">
+          {data.map((d, i) => (
+            <div key={i} className="w-8 sm:w-10 md:w-12 h-full flex flex-col items-center gap-1">
+              <div className="w-full flex-1 flex items-end">
+                <div
+                  className="w-full bg-primary/70 rounded-t"
+                  style={{ height: `${(d.value / max) * 100}%`, minHeight: d.value > 0 ? '4px' : 0 }}
+                  title={`${d.label}: ${d.value}`}
+                />
+              </div>
+              <div className="text-xs text-center truncate w-full" title={d.label}>{d.label}</div>
+              <div className="text-[10px] text-muted-foreground">{total ? ((d.value / total) * 100).toFixed(1) + '%': '0%'}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  function NumericHistogram({ values }: { values: number[] }) {
+    const bins = binNumeric(values, 10);
+    const max = Math.max(1, ...bins.map((b) => b.count));
+    return (
+      <div className="w-full">
+        <div className="flex items-end gap-2 h-64 border rounded-md p-2 bg-background">
+          {bins.map((b, i) => (
+            <div key={i} className="flex-1 flex flex-col items-center justify-end gap-1">
+              <div
+                className="w-full bg-blue-500/70 rounded-t"
+                style={{ height: `${(b.count / max) * 100}%` }}
+                title={`${b.x0.toFixed(2)} - ${b.x1.toFixed(2)}: ${b.count}`}
+              />
+              <div className="text-[10px] text-muted-foreground">{b.x0.toFixed(1)}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  function BoxPlot({ values, stats }: { values: number[]; stats?: { q1: number; q3: number; iqr: number; median?: number } }) {
+    if (values.length === 0) return null;
+    const sorted = [...values].sort((a, b) => a - b);
+    const dataMin = sorted[0];
+    const dataMax = sorted[sorted.length - 1];
+
+    // Prefer provided stats when available
+    const q1 = stats?.q1 ?? sorted[Math.floor(sorted.length * 0.25)];
+    const q3 = stats?.q3 ?? sorted[Math.floor(sorted.length * 0.75)];
+    const iqr = stats?.iqr ?? (q3 - q1);
+    const median = stats?.median ?? sorted[Math.floor(sorted.length * 0.5)];
+
+    // Whiskers using 1.5*IQR fences
+    const lowerFence = q1 - 1.5 * iqr;
+    const upperFence = q3 + 1.5 * iqr;
+
+    // Compute whiskers as most extreme non-outlier data points
+    const nonOutliers = sorted.filter((v) => v >= lowerFence && v <= upperFence);
+    const lowerWhisker = nonOutliers.length ? nonOutliers[0] : q1;
+    const upperWhisker = nonOutliers.length ? nonOutliers[nonOutliers.length - 1] : q3;
+
+    // Outliers
+    const lowerOutliers = sorted.filter((v) => v < lowerFence);
+    const upperOutliers = sorted.filter((v) => v > upperFence);
+
+    // Scale to full data range for context
+    const min = dataMin;
+    const max = dataMax;
+    const range = Math.max(1e-9, max - min);
+    const scale = (v: number) => ((v - min) / range) * 100;
+
+    return (
+      <div className="w-full">
+        <div className="relative h-32 border rounded-md bg-background">
+          {/* Axis line */}
+          <div className="absolute left-2 right-2 top-1/2 -translate-y-1/2 h-px bg-foreground/30" />
+
+          {/* Min / Max labels */}
+          <div className="absolute top-6 left-[2%] right-[2%] text-xs text-muted-foreground flex justify-between">
+            <span>{min.toFixed(2)}</span>
+            <span>{max.toFixed(2)}</span>
+          </div>
+
+          {/* Box + whiskers */}
+          <div className="absolute left-[2%] right-[2%] bottom-3 h-2">
+            <div className="relative h-full">
+              {/* Whiskers */}
+              <div className="absolute h-full w-px bg-foreground/60" style={{ left: `${scale(lowerWhisker)}%` }} />
+              <div className="absolute h-full w-px bg-foreground/60" style={{ left: `${scale(upperWhisker)}%` }} />
+
+              {/* Box (Q1 to Q3) */}
+              <div className="absolute h-full bg-primary/30" style={{ left: `${scale(q1)}%`, width: `${Math.max(0, scale(q3) - scale(q1))}%` }} />
+
+              {/* Median */}
+              <div className="absolute h-full w-px bg-primary" style={{ left: `${scale(median)}%` }} />
+            </div>
+          </div>
+
+          {/* Quartile labels */}
+          <div className="absolute left-[2%] right-[2%] bottom-8 text-[10px] text-muted-foreground flex justify-between">
+            <span>Q1: {q1.toFixed(2)}</span>
+            <span>Mediana: {median.toFixed(2)}</span>
+            <span>Q3: {q3.toFixed(2)}</span>
+          </div>
+
+          {/* Outliers as dots */}
+          <div className="absolute left-[2%] right-[2%] bottom-1 h-2">
+            <div className="relative h-full">
+              {lowerOutliers.map((v, i) => (
+                <div key={`lo-${i}`} className="absolute -bottom-1 translate-y-1/2 w-1.5 h-1.5 rounded-full bg-destructive" style={{ left: `${scale(v)}%` }} title={`Outlier: ${v}`} />
+              ))}
+              {upperOutliers.map((v, i) => (
+                <div key={`uo-${i}`} className="absolute -bottom-1 translate-y-1/2 w-1.5 h-1.5 rounded-full bg-destructive" style={{ left: `${scale(v)}%` }} title={`Outlier: ${v}`} />
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
 
   return (
     <main className="flex min-h-screen w-full flex-col items-center justify-start gap-8 bg-gray-100 dark:bg-gray-950 p-4 pt-20">
@@ -237,10 +403,11 @@ export default function Home() {
           <CardContent>
             
             <Tabs defaultValue={tableColumns ? 'data' : 'types'} className="w-full">
-              <TabsList className="grid w-full grid-cols-3">
+              <TabsList className="grid w-full grid-cols-4">
                 <TabsTrigger value="types">Tipos de Variáveis</TabsTrigger>
                 <TabsTrigger value="data" disabled={!tableColumns}>Tabela de Dados</TabsTrigger>
                 <TabsTrigger value="stats" disabled={!frequenciesResult && !centralTrendsResult && !quantilesResult && !dispersionResult}>Estatísticas</TabsTrigger>
+                <TabsTrigger value="charts" disabled={!cleanedMatrix}>Gráficos</TabsTrigger>
               </TabsList>
 
               <TabsContent value="types">
@@ -460,6 +627,95 @@ export default function Home() {
                       </div>
                     )}
                   </div>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="charts">
+                <div className="space-y-6 mt-4">
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor="charts-column">Coluna</Label>
+                    <select
+                      id="charts-column"
+                      className="border rounded-md px-2 py-1 bg-background"
+                      value={selectedColumn ?? ''}
+                      onChange={(e) => handleChangeColumn(e.target.value)}
+                      disabled={!headersList || headersList.length === 0}
+                    >
+                      {(headersList ?? []).map((h) => (
+                        <option key={h} value={h}>{h}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {!selectedColumn || !cleanedMatrix ? (
+                    <p className="text-sm text-muted-foreground">Selecione uma coluna para visualizar.</p>
+                  ) : (
+                    (() => {
+                      const numeric = isNumericColumn(cleanedMatrix, selectedColumn);
+                      if (numeric) {
+                        const vals = getNumericValues(cleanedMatrix, selectedColumn);
+                        return (
+                          <div className="space-y-8">
+                            <div>
+                              <h3 className="text-lg font-semibold mb-2">Histograma</h3>
+                              <NumericHistogram values={vals} />
+                            </div>
+                            <div>
+                              <h3 className="text-lg font-semibold mb-2">Boxplot</h3>
+                              <BoxPlot
+                                values={vals}
+                                stats={dispersionResult?.quartiles ? {
+                                  q1: Number(dispersionResult.quartiles.q1),
+                                  q3: Number(dispersionResult.quartiles.q3),
+                                  iqr: Number(dispersionResult.quartiles.iqr),
+                                  median: typeof centralTrendsResult?.median === 'number' ? centralTrendsResult?.median : undefined,
+                                } : undefined}
+                              />
+                            </div>
+                          </div>
+                        );
+                      } else {
+                        const data = (frequenciesResult ?? []).map(f => ({ label: String(f.value), value: f.absoluteFrequency }));
+                        const totalPagesCat = Math.max(1, Math.ceil(data.length / chartsItemsPerPage));
+                        const start = chartsPage * chartsItemsPerPage;
+                        const end = start + chartsItemsPerPage;
+                        const pageData = data.slice(start, end);
+                        return (
+                          <div className="space-y-3">
+                            <h3 className="text-lg font-semibold">Barras</h3>
+                            {data.length === 0 ? (
+                              <p className="text-sm text-muted-foreground">Nenhum dado para exibir.</p>
+                            ) : (
+                              <>
+                                <CategoricalBarChart data={pageData} />
+                                <div className="flex items-center justify-between mt-1">
+                                  <span className="text-sm text-muted-foreground">Página {chartsPage + 1} de {totalPagesCat}</span>
+                                  <div className="space-x-2">
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => setChartsPage((p) => Math.max(0, p - 1))}
+                                      disabled={chartsPage <= 0}
+                                    >
+                                      Anterior
+                                    </Button>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => setChartsPage((p) => Math.min(totalPagesCat - 1, p + 1))}
+                                      disabled={chartsPage >= totalPagesCat - 1}
+                                    >
+                                      Próxima
+                                    </Button>
+                                  </div>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        );
+                      }
+                    })()
+                  )}
                 </div>
               </TabsContent>
 
