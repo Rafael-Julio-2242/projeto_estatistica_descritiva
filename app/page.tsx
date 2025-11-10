@@ -390,7 +390,7 @@ export default function Home() {
               <Label htmlFor="csvFile">Selecione o arquivo</Label>
               <Input 
                 type="file" 
-                accept=".csv" 
+                accept=".csv, .xlsx" 
                 id="csvFile" 
                 name="csvFile" 
                 className="w-full"
