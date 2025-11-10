@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 
 // --- Imports da Lógica ---
 import * as XLSX from 'xlsx'
@@ -75,6 +75,71 @@ export default function Home() {
   const [centralTrendsResult, setCentralTrendsResult] = useState<{ mean: number; median: number; mode: number; modeCount: number } | null>(null)
   const [quantilesResult, setQuantilesResult] = useState<Quantile[] | null>(null)
   const [dispersionResult, setDispersionResult] = useState<any | null>(null)
+
+  // Refs for exporting charts as images
+  const chartsBarRef = useRef<HTMLDivElement | null>(null)
+  const chartsHistRef = useRef<HTMLDivElement | null>(null)
+  const chartsBoxRef = useRef<HTMLDivElement | null>(null)
+
+  function downloadBlob(filename: string, blob: Blob) {
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+  }
+
+  function exportResultsJSON() {
+    const payload = {
+      column: selectedColumn,
+      frequencies: frequenciesResult,
+      centralTrends: centralTrendsResult,
+      quantiles: quantilesResult,
+      dispersion: dispersionResult,
+    }
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
+    downloadBlob(`relatorio-${selectedColumn ?? 'coluna'}.json`, blob)
+  }
+
+  async function exportChartPNG(container: HTMLDivElement | null, filename: string) {
+    if (!container) return
+    const svg = container.querySelector('svg') as SVGSVGElement | null
+    if (!svg) return
+    const serializer = new XMLSerializer()
+    const svgString = serializer.serializeToString(svg)
+    const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' })
+    const url = URL.createObjectURL(svgBlob)
+    const img = new Image()
+    const viewBox = svg.getAttribute('viewBox')
+    let width = svg.clientWidth || 800
+    let height = svg.clientHeight || 450
+    if (viewBox) {
+      const parts = viewBox.split(' ').map(Number)
+      if (parts.length === 4) { width = parts[2]; height = parts[3] }
+    }
+    await new Promise<void>((resolve) => { img.onload = () => resolve(); img.src = url })
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.max(1, Math.floor(width))
+    canvas.height = Math.max(1, Math.floor(height))
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--background') || '#ffffff'
+    ctx.fillRect(0, 0, canvas.width, canvas.height)
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+    URL.revokeObjectURL(url)
+    canvas.toBlob((blob) => { if (blob) downloadBlob(filename, blob) }, 'image/png')
+  }
+
+  async function exportChartsPNG() {
+    const tasks: Promise<void>[] = []
+    if (chartsBarRef.current) tasks.push(exportChartPNG(chartsBarRef.current, `barras-${selectedColumn ?? 'coluna'}.png`))
+    if (chartsHistRef.current) tasks.push(exportChartPNG(chartsHistRef.current, `histograma-${selectedColumn ?? 'coluna'}.png`))
+    if (chartsBoxRef.current) tasks.push(exportChartPNG(chartsBoxRef.current, `boxplot-${selectedColumn ?? 'coluna'}.png`))
+    await Promise.all(tasks)
+  }
 
   // Paginação
   const rowsPerPage = 10
@@ -231,11 +296,11 @@ export default function Home() {
     return out;
   }
 
-  function CategoricalBarChart({ data }: { data: { label: string; value: number }[] }) {
+  function CategoricalBarChart({ data, containerRef }: { data: { label: string; value: number }[]; containerRef?: React.RefObject<HTMLDivElement | null> }) {
     const total = data.reduce((a, b) => a + b.value, 0)
     const chartConfig = { value: { label: 'Frequência', color: 'hsl(var(--primary))' } }
     return (
-      <div className="w-full">
+      <div className="w-full" ref={containerRef}>
         <ChartContainer config={chartConfig} className="h-64 w-full">
           <RBarChart data={data} barCategoryGap={8} margin={{ top: 8, right: 16, left: 8, bottom: 8 }}>
             <CartesianGrid vertical={false} strokeDasharray="3 3" />
@@ -250,11 +315,12 @@ export default function Home() {
     )
   }
 
-  function NumericHistogram({ values }: { values: number[] }) {
+  function NumericHistogram({ values, containerRef }: { values: number[]; containerRef?: React.RefObject<HTMLDivElement | null> }) {
     const bins = binNumeric(values, 10)
     const data = bins.map(b => ({ label: `${b.x0.toFixed(1)}–${b.x1.toFixed(1)}`, count: b.count }))
     const chartConfig = { count: { label: 'Contagem', color: 'hsl(var(--primary))' } }
     return (
+      <div className="w-full" ref={containerRef}>
       <ChartContainer config={chartConfig} className="h-64 w-full">
         <RBarChart data={data} margin={{ top: 8, right: 16, left: 8, bottom: 8 }}>
           <CartesianGrid vertical={false} strokeDasharray="3 3" />
@@ -264,10 +330,11 @@ export default function Home() {
           <Bar dataKey="count" fill="var(--color-count)" />
         </RBarChart>
       </ChartContainer>
+      </div>
     )
   }
 
-  function BoxPlot({ values, stats }: { values: number[]; stats?: { q1: number; q3: number; iqr: number; median?: number } }) {
+  function BoxPlot({ values, stats, containerRef }: { values: number[]; stats?: { q1: number; q3: number; iqr: number; median?: number }; containerRef?: React.RefObject<HTMLDivElement | null> }) {
     if (values.length === 0) return null
     const sorted = [...values].sort((a, b) => a - b)
     const dataMin = sorted[0]
@@ -288,18 +355,20 @@ export default function Home() {
     const chartConfig = { box: { label: 'Boxplot', color: 'hsl(var(--primary))' } }
 
     return (
-      <ChartContainer config={chartConfig} className="h-48 w-full">
-        <ComposedChart data={data} margin={{ top: 8, right: 16, bottom: 8, left: 16 }}>
-          <XAxis type="number" dataKey="median" domain={[dataMin, dataMax]} tickLine={false} axisLine={false} />
-          <YAxis type="number" hide domain={[0, 1]} />
-          <ChartTooltip content={<ChartTooltipContent />} />
-          <ReferenceLine x={lowerWhisker} stroke="var(--color-box)" />
-          <ReferenceLine x={upperWhisker} stroke="var(--color-box)" />
-          <ReferenceArea x1={q1} x2={q3} fill="var(--color-box)" fillOpacity={0.3} />
-          <ReferenceLine x={median} stroke="var(--color-box)" strokeWidth={2} />
-          <Scatter data={outliers} fill="hsl(var(--destructive))" />
-        </ComposedChart>
-      </ChartContainer>
+      <div className="w-full" ref={containerRef}>
+        <ChartContainer config={chartConfig} className="h-48 w-full">
+          <ComposedChart data={data} margin={{ top: 8, right: 16, bottom: 8, left: 16 }}>
+            <XAxis type="number" dataKey="median" domain={[dataMin, dataMax]} tickLine={false} axisLine={false} />
+            <YAxis type="number" hide domain={[0, 1]} />
+            <ChartTooltip content={<ChartTooltipContent />} />
+            <ReferenceLine x={lowerWhisker} stroke="var(--color-box)" />
+            <ReferenceLine x={upperWhisker} stroke="var(--color-box)" />
+            <ReferenceArea x1={q1} x2={q3} fill="var(--color-box)" fillOpacity={0.3} />
+            <ReferenceLine x={median} stroke="var(--color-box)" strokeWidth={2} />
+            <Scatter data={outliers} fill="hsl(var(--destructive))" />
+          </ComposedChart>
+        </ChartContainer>
+      </div>
     )
   }
 
@@ -606,7 +675,7 @@ export default function Home() {
                           <div className="space-y-8">
                             <div>
                               <h3 className="text-lg font-semibold mb-2">Histograma</h3>
-                              <NumericHistogram values={vals} />
+                              <NumericHistogram values={vals} containerRef={chartsHistRef} />
                             </div>
                             <div>
                               <h3 className="text-lg font-semibold mb-2">Boxplot</h3>
@@ -618,7 +687,35 @@ export default function Home() {
                                   iqr: Number(dispersionResult.quartiles.iqr),
                                   median: typeof centralTrendsResult?.median === 'number' ? centralTrendsResult?.median : undefined,
                                 } : undefined}
+                                containerRef={chartsBoxRef}
                               />
+                            </div>
+
+                            <div className="rounded-md border p-3">
+                              <div className="font-medium mb-2">Mini relatório</div>
+                              <div className="grid gap-2 text-sm md:grid-cols-2">
+                                <div>
+                                  <div><span className="text-muted-foreground">Coluna:</span> {selectedColumn}</div>
+                                  <div><span className="text-muted-foreground">Tipo:</span> Numérica</div>
+                                  <div><span className="text-muted-foreground">Média:</span> {fmt(centralTrendsResult?.mean)}</div>
+                                  <div><span className="text-muted-foreground">Mediana:</span> {fmt(centralTrendsResult?.median)}</div>
+                                  <div><span className="text-muted-foreground">Moda:</span> {fmt(centralTrendsResult?.mode)}</div>
+                                  <div><span className="text-muted-foreground">IQR:</span> {dispersionResult?.quartiles?.iqr}</div>
+                                </div>
+                                <div>
+                                  <div className="font-medium mb-1">Fórmulas (curtas)</div>
+                                  <div>Frequência relativa: f_i / n</div>
+                                  <div>Média: Σx / n</div>
+                                  <div>Mediana: valor central</div>
+                                  <div>Moda: valor mais frequente</div>
+                                  <div>IQR: Q3 − Q1</div>
+                                  <div>DP: √Variância</div>
+                                </div>
+                              </div>
+                              <div className="mt-2 flex gap-2">
+                                <Button type="button" variant="outline" onClick={exportResultsJSON}>Exportar Resultados (JSON)</Button>
+                                <Button type="button" onClick={exportChartsPNG}>Exportar Imagens (PNG)</Button>
+                              </div>
                             </div>
                           </div>
                         );
@@ -635,7 +732,7 @@ export default function Home() {
                               <p className="text-sm text-muted-foreground">Nenhum dado para exibir.</p>
                             ) : (
                               <>
-                                <CategoricalBarChart data={pageData} />
+                                <CategoricalBarChart data={pageData} containerRef={chartsBarRef} />
                                 <div className="flex items-center justify-between mt-1">
                                   <span className="text-sm text-muted-foreground">Página {chartsPage + 1} de {totalPagesCat}</span>
                                   <div className="space-x-2">
