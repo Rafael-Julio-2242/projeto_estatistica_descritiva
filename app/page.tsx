@@ -235,10 +235,13 @@ export default function Home() {
     const frequencies = CalculateColumnFrequencies([...fullColumn])
     setFrequenciesResult(frequencies)
 
+    // TODO Aqui tem que calcular a moda pra coisas que não são numéricas também.
+    // TODO Ta convertendo coisa que não é numérica em número, fazendo retornar NaN em alguns casos
     if (isNumeric) {
       const numericValues = values.map((v: any) => Number(v))
       const central = CalculateCentralTrends(numericValues)
       setCentralTrendsResult(central)
+      console.log('[CENTRAL TRENDS]: ', central);
       const quant = CalculateQuantiles(numericValues)
       setQuantilesResult(quant)
       const disp = CalculateDispersion(numericValues)
@@ -248,7 +251,10 @@ export default function Home() {
       setQuantilesResult(null)
       setDispersionResult(null)
       // Para tendências centrais, evitamos NaN; exibiremos apenas moda via frequências na UI (com fallback '-')
-      setCentralTrendsResult({ mean: Number.NaN, median: Number.NaN, mode: Number.NaN, modeCount: (frequencies.sort((a,b)=>b.absoluteFrequency-a.absoluteFrequency)[0]?.absoluteFrequency) ?? 0 })
+      const central = CalculateCentralTrends(values)
+
+      console.log('[NON NUMERIC CENTRAL TRENDS]: ', central);
+      setCentralTrendsResult(central)
     }
   }
 
@@ -259,7 +265,8 @@ export default function Home() {
   }
 
   function fmt(n?: number) {
-    return typeof n === 'number' && Number.isFinite(n) ? n : '-'
+    if (n === undefined) return '-'
+    else return n
   }
 
   function isNumericColumn(matrix: any[] | null, columnName: string | null) {
@@ -571,7 +578,7 @@ export default function Home() {
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                         <div className="rounded-md border p-3"><div className="text-muted-foreground">Média</div><div className="font-medium">{fmt(centralTrendsResult.mean)}</div></div>
                         <div className="rounded-md border p-3"><div className="text-muted-foreground">Mediana</div><div className="font-medium">{fmt(centralTrendsResult.median)}</div></div>
-                        <div className="rounded-md border p-3"><div className="text-muted-foreground">Moda</div><div className="font-medium">{fmt(centralTrendsResult.mode)}</div></div>
+                        <div className="rounded-md border p-3"><div className="text-muted-foreground">Moda</div><div className="font-medium">{centralTrendsResult.mode}</div></div>
                         <div className="rounded-md border p-3"><div className="text-muted-foreground">Frequência da Moda</div><div className="font-medium">{centralTrendsResult.modeCount}</div></div>
                       </div>
                     )}

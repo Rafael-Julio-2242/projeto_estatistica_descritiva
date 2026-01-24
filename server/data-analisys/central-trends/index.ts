@@ -6,8 +6,6 @@ export default function CalculateCentralTrends(inputData: any[]) {
 
     const totalValues = data.length;
 
-    console.log('[TOTAL VALUES]: ', totalValues);
-
     // Aqui eu preciso calcular a média - Quando possível
     // Aqui eu preciso calcular a mediana - Quando possível
     // Aqui eu preciso calcular a moda
@@ -15,9 +13,14 @@ export default function CalculateCentralTrends(inputData: any[]) {
     let canCalculateMean = true;
     let canCalculateMedian = true;
 
-    if (isNaN(Number(data[1]))) {
-        canCalculateMean = false;
-        canCalculateMedian = false;
+    let canMakeNumericCalc = true;
+
+    for (const d of data) {
+        if (isNaN(Number(d))) {
+            canCalculateMean = false;
+            canCalculateMedian = false;
+            break;
+        }
     }
 
     if (canCalculateMedian) {
@@ -26,7 +29,7 @@ export default function CalculateCentralTrends(inputData: any[]) {
 
     let mean = 0;
     let median = 0;
-    let modeMap = new Map<string, number>();
+    let modeMap = new Map<string, any>();
 
     if (canCalculateMean) {
         mean = data.reduce((a, b) => a + b) / totalValues;
@@ -38,6 +41,7 @@ export default function CalculateCentralTrends(inputData: any[]) {
 
     for (let i = 0; i < data.length; i++) {
         const value = data[i];
+        console.log('[VALUE]: ', value);
         if (!modeMap.has(`${value}`)) {
             modeMap.set(`${value}`, 1);
         } else {
@@ -45,20 +49,21 @@ export default function CalculateCentralTrends(inputData: any[]) {
         }
     }
 
-    let mode = 0;
+    let mode: any = 0;
     let modeCount = 0;
 
     const modeMapKeys = Array.from(modeMap.entries());
-
 
     for (let i = 0; i < modeMapKeys.length; i++) {
         const value = modeMapKeys[i];
         const valueCount = value[1];
         if (valueCount > modeCount) {
-            mode = Number(value[0]);
+            mode = `${value[0]}`;
             modeCount = valueCount;
         }
     }
+
+    console.log('[MODE]: ', mode);
 
     return {
         mean,
