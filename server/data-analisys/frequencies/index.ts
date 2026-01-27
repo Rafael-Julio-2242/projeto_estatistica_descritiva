@@ -12,7 +12,7 @@ export type ColumnFrequencyValue = {
     absoluteFrequency: number,
 }
 
-export default function CalculateColumnFrequencies(inputData: any[]) {
+export default function CalculateColumnFrequencies(inputData: any[], rangesCalculation?: false) {
 
     // Vou calcular todas as frequências para apenas uma Coluna aqui
     // Aqui eu assumo que as informações que eu estou recebendo é de uma coluna apenas
@@ -34,6 +34,22 @@ export default function CalculateColumnFrequencies(inputData: any[]) {
     }
 
     const totalValues = data.length;
+
+    if (rangesCalculation) {
+        // TODO Aqui começa o tratamento para o cálculo de "ranges" da parada
+
+        const sqrt = Math.sqrt(data.length);
+        const minValue = data.reduce((a, b) => Math.min(a, b));
+        const maxValue = data.reduce((a, b) => Math.max(a, b));
+        
+        const valuesDiff = maxValue - minValue;
+
+        const range = Math.ceil(valuesDiff / sqrt);
+
+        // Preciso agrupar os valores por "range", e dai definir a frequência de cada range
+
+        return []
+    }
     
     for (let i = 0; i < data.length; i++) {
         const value = data[i];
