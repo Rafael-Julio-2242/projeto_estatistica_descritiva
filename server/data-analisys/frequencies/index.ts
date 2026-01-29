@@ -1,18 +1,8 @@
+"use server";
 
-export enum Frequency {
-    ABSOLUTE = "Frequência Absoluta",
-    RELATIVE = "Frequência Relativa",
-    ACUMULATIVE = "Frequência Acumulativa"    
-}
+import { ColumnFrequencyValue } from "../types";
 
-export type ColumnFrequencyValue = {
-    value: string,
-    relativeFrequency: number,
-    absoluteCumulativeFrequency?: number,
-    absoluteFrequency: number,
-}
-
-export default function CalculateColumnFrequencies(inputData: any[], rangesCalculation?: false) {
+export async function CalculateColumnFrequencies(inputData: any[], rangesCalculation?: boolean) {
 
     // Vou calcular todas as frequências para apenas uma Coluna aqui
     // Aqui eu assumo que as informações que eu estou recebendo é de uma coluna apenas
@@ -35,20 +25,90 @@ export default function CalculateColumnFrequencies(inputData: any[], rangesCalcu
 
     const totalValues = data.length;
 
-    if (rangesCalculation) {
+    if (rangesCalculation && calculateAbsoluteAccumulativeFrequency) {
         // TODO Aqui começa o tratamento para o cálculo de "ranges" da parada
 
         const sqrt = Math.sqrt(data.length);
         const minValue = data.reduce((a, b) => Math.min(a, b));
         const maxValue = data.reduce((a, b) => Math.max(a, b));
+
+        console.log({
+            minValue,
+            maxValue,
+            sqrt
+        })
         
         const valuesDiff = maxValue - minValue;
 
-        const range = Math.ceil(valuesDiff / sqrt);
+        console.log({
+            valuesDiff
+        });
+
+        const range = Number((valuesDiff / sqrt).toFixed(3))
+        data.sort((a, b) => a - b);
+
+        console.log({
+            range
+        });
 
         // Preciso agrupar os valores por "range", e dai definir a frequência de cada range
 
-        return []
+        let helperData = data;
+
+        let currentMinValue = minValue;
+        let currentMaxValue = currentMinValue + range;
+
+        const finalIndex = data.length - 1;
+
+        let index = 0;
+        
+        console.log('[CALCULATING RANGES.....]');
+        while (true) {
+            const groupValues = helperData.filter((value, index) => {
+                if (finalIndex === index) return true;
+
+                if (value >= currentMinValue && value < currentMaxValue) {
+                    return true;
+                }
+
+                return false
+            });
+
+            absoluteCumulativeFrequency += groupValues.length;
+
+            frequenciesMap.set(`${currentMinValue} - ${currentMaxValue}`, {
+                value: `${currentMinValue} - ${currentMaxValue}`,
+                relativeFrequency: groupValues.length / totalValues,
+                absoluteFrequency: groupValues.length,
+                absoluteCumulativeFrequency: absoluteCumulativeFrequency
+            });
+
+            helperData = helperData.filter((value) => {
+                const gp = groupValues.find((groupValue) => groupValue === value)
+                if (!gp) return true;
+                return false
+            });
+
+            console.log('[HELPER DATA LENGTH]: ', helperData.length);
+            console.log('[GROUP DATA LENGTH]: ', helperData.length);
+
+
+            currentMinValue = Number((currentMinValue + range).toFixed(3));
+            currentMaxValue = Number((currentMaxValue + range).toFixed(3));
+
+            console.log({
+                currentMinValue,
+                currentMaxValue,
+            })
+
+            console.log('[HELPER DATA]: ', helperData.length);
+
+            if (helperData.length <= 0) {
+                break;
+            }
+        }
+
+        return Array.from(frequenciesMap.values());
     }
     
     for (let i = 0; i < data.length; i++) {

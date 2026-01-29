@@ -7,11 +7,11 @@ import * as XLSX from 'xlsx'
 import { JsonToDataArray, DataArrayToJson } from '@/helpers/json-convertions'
 import { InitialTreatment } from '@/server/data-analisys/initial-treatment'
 import { ExtractColumnFromData } from '@/helpers/extract-data'
-import CalculateColumnFrequencies from '@/server/data-analisys/frequencies'
+import { CalculateColumnFrequencies } from '@/server/data-analisys/frequencies'
 import CalculateCentralTrends from '@/server/data-analisys/central-trends'
 import CalculateQuantiles from '@/server/data-analisys/quantiles'
 import CalculateDispersion from '@/server/data-analisys/dispersion'
-import type { ColumnFrequencyValue } from '@/server/data-analisys/frequencies'
+import type { ColumnFrequencyValue } from '@/server/data-analisys/types'
 import type { Quantile } from '@/server/data-analisys/quantiles'
 
 // --- Imports de UI ---
@@ -184,9 +184,6 @@ export default function Home() {
     
     const { cleanedData, columnTypes } = await InitialTreatment(dataArray)
 
-    console.log('CLEANED DATA: ', cleanedData)
-    console.log('COLUMN TYPES: ', columnTypes)
-
     // --- Monta colunas e linhas da Tabela Dinâmica ---
     if (cleanedData && cleanedData.length > 0) {
       const headers = cleanedData[0] as string[]
@@ -223,7 +220,7 @@ export default function Home() {
     setIsLoading(false)
   }
 
-  function computeStatsFor(columnName: string, matrix?: any[]) {
+  async function computeStatsFor(columnName: string, matrix?: any[]) {
     const dataMatrix = matrix ?? cleanedMatrix
     if (!dataMatrix) return
 
@@ -232,8 +229,14 @@ export default function Home() {
     const isNumeric = values.length > 0 && !isNaN(Number(values[0]))
 
     // Frequências sempre são calculadas
-    const frequencies = CalculateColumnFrequencies([...fullColumn])
+    const frequencies = await CalculateColumnFrequencies([...fullColumn], true)
     setFrequenciesResult(frequencies)
+
+    console.log('[------------------------------------]');
+    console.log('[CALCULO TESTE]: ', await CalculateColumnFrequencies([...fullColumn], true));
+    console.log('[------------------------------------]');
+
+
 
     // TODO Aqui tem que calcular a moda pra coisas que não são numéricas também.
     // TODO Ta convertendo coisa que não é numérica em número, fazendo retornar NaN em alguns casos
