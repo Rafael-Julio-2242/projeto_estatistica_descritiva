@@ -41,7 +41,6 @@ export default function CalculateCentralTrends(inputData: any[]) {
 
     for (let i = 0; i < data.length; i++) {
         const value = data[i];
-        console.log('[VALUE]: ', value);
         if (!modeMap.has(`${value}`)) {
             modeMap.set(`${value}`, 1);
         } else {
@@ -62,8 +61,6 @@ export default function CalculateCentralTrends(inputData: any[]) {
             modeCount = valueCount;
         }
     }
-
-    console.log('[MODE]: ', mode);
 
     return {
         mean,

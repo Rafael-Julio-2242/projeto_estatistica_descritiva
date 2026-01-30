@@ -182,7 +182,9 @@ export default function Home() {
 
     const dataArray = JsonToDataArray(json)
     
-    const { cleanedData, columnTypes } = await InitialTreatment(dataArray)
+    const { cleanedData, columnTypes } = await InitialTreatment(dataArray);
+
+    setResults(() => columnTypes as ColumnType[] || []);
 
     // --- Monta colunas e linhas da Tabela Dinâmica ---
     if (cleanedData && cleanedData.length > 0) {
@@ -198,8 +200,8 @@ export default function Home() {
       setHeadersList(headers)
       setCleanedMatrix(cleanedData)
       const defaultHeader = headers.includes('IMDb Rating') ? 'IMDb Rating' : headers[0]
-      setSelectedColumn(defaultHeader)
-      computeStatsFor(defaultHeader, cleanedData)
+      setSelectedColumn(defaultHeader);
+      computeStatsFor(defaultHeader, columnTypes ,cleanedData);
       setCurrentPage(0)
     } else {
       setTableColumns(null)
@@ -214,13 +216,10 @@ export default function Home() {
       setCurrentPage(0)
     }
 
-    console.log('cleanedData: ', cleanedData); 
-    setResults(columnTypes as ColumnType[] || [])
-
     setIsLoading(false)
   }
 
-  async function computeStatsFor(columnName: string, matrix?: any[]) {
+  async function computeStatsFor(columnName: string, columnTypes: ColumnType[] | null = null ,matrix?: any[]) {
     const dataMatrix = matrix ?? cleanedMatrix
     if (!dataMatrix) return
 
@@ -228,14 +227,23 @@ export default function Home() {
     const values = fullColumn.slice(1)
     const isNumeric = values.length > 0 && !isNaN(Number(values[0]))
 
+    let calculateRange = false;
+    
+    if (columnTypes) {
+      const columnType = columnTypes.find((colType) => colType.firstValue === columnName);
+
+      console.log('[COLUMN TYPE]: ', columnType);
+
+      if (columnType && columnType.type === 'quantitativa continua') {
+        calculateRange = true;
+      }
+    }
+
+
+    const frequencies = await CalculateColumnFrequencies([...fullColumn], calculateRange)
+
     // Frequências sempre são calculadas
-    const frequencies = await CalculateColumnFrequencies([...fullColumn], true)
     setFrequenciesResult(frequencies)
-
-    console.log('[------------------------------------]');
-    console.log('[CALCULO TESTE]: ', await CalculateColumnFrequencies([...fullColumn], true));
-    console.log('[------------------------------------]');
-
 
 
     // TODO Aqui tem que calcular a moda pra coisas que não são numéricas também.
@@ -244,7 +252,6 @@ export default function Home() {
       const numericValues = values.map((v: any) => Number(v))
       const central = CalculateCentralTrends(numericValues)
       setCentralTrendsResult(central)
-      console.log('[CENTRAL TRENDS]: ', central);
       const quant = CalculateQuantiles(numericValues)
       setQuantilesResult(quant)
       const disp = CalculateDispersion(numericValues)
@@ -263,7 +270,7 @@ export default function Home() {
 
   function handleChangeColumn(col: string) {
     setSelectedColumn(col)
-    computeStatsFor(col)
+    computeStatsFor(col, results)
     setChartsPage(0)
   }
 

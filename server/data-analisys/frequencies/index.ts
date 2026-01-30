@@ -62,7 +62,6 @@ export async function CalculateColumnFrequencies(inputData: any[], rangesCalcula
 
         let index = 0;
         
-        console.log('[CALCULATING RANGES.....]');
         while (true) {
             const groupValues = helperData.filter((value, index) => {
                 if (finalIndex === index) return true;
@@ -89,10 +88,6 @@ export async function CalculateColumnFrequencies(inputData: any[], rangesCalcula
                 return false
             });
 
-            console.log('[HELPER DATA LENGTH]: ', helperData.length);
-            console.log('[GROUP DATA LENGTH]: ', helperData.length);
-
-
             currentMinValue = Number((currentMinValue + range).toFixed(3));
             currentMaxValue = Number((currentMaxValue + range).toFixed(3));
 
@@ -100,8 +95,6 @@ export async function CalculateColumnFrequencies(inputData: any[], rangesCalcula
                 currentMinValue,
                 currentMaxValue,
             })
-
-            console.log('[HELPER DATA]: ', helperData.length);
 
             if (helperData.length <= 0) {
                 break;

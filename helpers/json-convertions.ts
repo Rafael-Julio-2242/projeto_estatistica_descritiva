@@ -25,7 +25,6 @@ export function JsonToDataArray(json: any[]) {
             for (const key in row) {
                 rowData.push(key)
             }
-            console.log('[ROW DATA]: ', rowData);
             data.push(rowData)
         }
         const row = json[i]
