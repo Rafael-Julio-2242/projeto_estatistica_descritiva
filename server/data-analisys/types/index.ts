@@ -11,3 +11,19 @@ export type ColumnFrequencyValue = {
     absoluteCumulativeFrequency?: number,
     absoluteFrequency: number,
 }
+
+export enum PearsonCorrelationType {
+    WEAK,
+    MEDIUM,
+    STRONG
+}
+
+export type PearsonCalcResponse = {
+    success: true;
+    value: number;
+    type: PearsonCorrelationType;
+    direction: "positive" | "negative"
+} | {
+    success: false;
+    message: string;
+}

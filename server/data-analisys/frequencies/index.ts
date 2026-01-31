@@ -91,11 +91,6 @@ export async function CalculateColumnFrequencies(inputData: any[], rangesCalcula
             currentMinValue = Number((currentMinValue + range).toFixed(3));
             currentMaxValue = Number((currentMaxValue + range).toFixed(3));
 
-            console.log({
-                currentMinValue,
-                currentMaxValue,
-            })
-
             if (helperData.length <= 0) {
                 break;
             }

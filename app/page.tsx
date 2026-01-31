@@ -13,6 +13,8 @@ import CalculateQuantiles from '@/server/data-analisys/quantiles'
 import CalculateDispersion from '@/server/data-analisys/dispersion'
 import type { ColumnFrequencyValue } from '@/server/data-analisys/types'
 import type { Quantile } from '@/server/data-analisys/quantiles'
+import { CalculatePearsonCorrelation } from '@/server/data-analisys/pearson-correlation/pearson-correlation'
+
 
 // --- Imports de UI ---
 import { Input } from '@/components/ui/input'
@@ -183,7 +185,7 @@ export default function Home() {
     const dataArray = JsonToDataArray(json)
     
     const { cleanedData, columnTypes } = await InitialTreatment(dataArray);
-
+    
     setResults(() => columnTypes as ColumnType[] || []);
 
     // --- Monta colunas e linhas da Tabela Dinâmica ---
@@ -203,6 +205,17 @@ export default function Home() {
       setSelectedColumn(defaultHeader);
       computeStatsFor(defaultHeader, columnTypes ,cleanedData);
       setCurrentPage(0)
+
+      // PARA TESTE
+      const imdbRating = ExtractColumnFromData(cleanedData, 'IMDb Rating').map((val) => Number(val));
+      const rank = ExtractColumnFromData(cleanedData, 'Rank').map((val) => Number(val));
+      
+      imdbRating.shift();
+      rank.shift();
+
+      const pearsonCorrelation = await CalculatePearsonCorrelation(imdbRating, rank);
+      console.log('[PEARSON CORRELATION]: ', pearsonCorrelation);
+
     } else {
       setTableColumns(null)
       setTableRows([])
