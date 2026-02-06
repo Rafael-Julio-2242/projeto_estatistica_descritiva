@@ -5,7 +5,7 @@ import { useState, useRef } from 'react'
 // --- Imports da Lógica ---
 import * as XLSX from 'xlsx'
 import { JsonToDataArray, DataArrayToJson } from '@/helpers/json-convertions'
-import { InitialTreatment } from '@/server/data-analisys/initial-treatment'
+import { InitialTreatment } from '@/server/data-analisys/pearson-correlation/initial-treatment'
 import { ExtractColumnFromData } from '@/helpers/extract-data'
 import { CalculateColumnFrequencies } from '@/server/data-analisys/frequencies'
 import CalculateCentralTrends from '@/server/data-analisys/central-trends'
@@ -46,6 +46,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { CalculateRegressionLine } from '@/server/data-analisys/calculate-regression-line'
 
 // --- Interface para Tipos de Coluna (para tipagem mais forte) ---
 interface ColumnType {
@@ -215,6 +216,11 @@ export default function Home() {
 
       const pearsonCorrelation = await CalculatePearsonCorrelation(imdbRating, rank);
       console.log('[PEARSON CORRELATION]: ', pearsonCorrelation);
+
+      const regressionLine = await CalculateRegressionLine(imdbRating, rank);
+      console.log('[REGRESSION LINE]: ', regressionLine);
+
+      
 
     } else {
       setTableColumns(null)
