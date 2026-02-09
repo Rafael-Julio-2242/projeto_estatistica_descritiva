@@ -11,6 +11,7 @@ import { CalculateColumnFrequencies } from '@/server/data-analisys/frequencies'
 import CalculateCentralTrends from '@/server/data-analisys/central-trends'
 import CalculateQuantiles from '@/server/data-analisys/quantiles'
 import CalculateDispersion from '@/server/data-analisys/dispersion'
+import calculateNormalDistribution, { formatNormalDistributionResults, type FishData, type NormalDistributionResult } from '@/server/data-analisys/standard-dispersion'
 import type { ColumnFrequencyValue } from '@/server/data-analisys/types'
 import type { Quantile } from '@/server/data-analisys/quantiles'
 import { CalculatePearsonCorrelation } from '@/server/data-analisys/pearson-correlation/pearson-correlation'
@@ -85,6 +86,13 @@ export default function Home() {
   const [correlationResult, setCorrelationResult] = useState<any | null>(null)
   const [regressionResult, setRegressionResult] = useState<any | null>(null)
   const [isCalculatingCorrelation, setIsCalculatingCorrelation] = useState(false)
+
+  // Estado para distribuição normal
+  const [normalDistributionResult, setNormalDistributionResult] = useState<NormalDistributionResult | null>(null)
+  const [selectedWeightColumn, setSelectedWeightColumn] = useState<string | null>(null)
+  const [isCalculatingNormal, setIsCalculatingNormal] = useState(false)
+  const [minRange, setMinRange] = useState<number>(400)
+  const [maxRange, setMaxRange] = useState<number>(500)
 
   // Refs for exporting charts as images
   const chartsBarRef = useRef<HTMLDivElement | null>(null)
@@ -366,6 +374,47 @@ export default function Home() {
     });
   }
 
+  function calculateNormalDistributionForColumn() {
+    if (!selectedWeightColumn || !cleanedMatrix) {
+      alert('Por favor, selecione uma coluna numérica.');
+      return;
+    }
+
+    if (minRange >= maxRange) {
+      alert('O valor mínimo deve ser menor que o valor máximo.');
+      return;
+    }
+
+    setIsCalculatingNormal(true);
+    
+    try {
+      // Extrair dados da coluna de peso
+      const weightData = ExtractColumnFromData(cleanedMatrix, selectedWeightColumn);
+      const weights = weightData.slice(1).map(val => Number(val)).filter(val => !isNaN(val));
+      
+      if (weights.length === 0) {
+        alert('A coluna selecionada não contém dados numéricos válidos.');
+        setIsCalculatingNormal(false);
+        return;
+      }
+
+      // Converter para formato FishData
+      const fishData: FishData[] = weights.map(weight => ({ weight }));
+      
+      // Calcular distribuição normal com intervalo personalizado
+      const result = calculateNormalDistribution(fishData, minRange, maxRange);
+      setNormalDistributionResult(result);
+      
+      console.log('Resultado da distribuição normal:', result);
+      
+    } catch (error) {
+      console.error('Erro ao calcular distribuição normal:', error);
+      alert('Oc orreu um erro ao calcular a distribuição normal.');
+    } finally {
+      setIsCalculatingNormal(false);
+    }
+  }
+
   function binNumeric(values: number[], bins = 10) {
     if (values.length === 0) return [] as { x0: number; x1: number; count: number }[];
     const min = Math.min(...values);
@@ -510,12 +559,13 @@ export default function Home() {
           <CardContent>
             
             <Tabs defaultValue={tableColumns ? 'data' : 'types'} className="w-full">
-              <TabsList className="grid w-full grid-cols-5">
+              <TabsList className="grid w-full grid-cols-6">
                 <TabsTrigger value="types">Tipos de Variáveis</TabsTrigger>
                 <TabsTrigger value="data" disabled={!tableColumns}>Tabela de Dados</TabsTrigger>
                 <TabsTrigger value="stats" disabled={!frequenciesResult && !centralTrendsResult && !quantilesResult && !dispersionResult}>Estatísticas</TabsTrigger>
                 <TabsTrigger value="charts" disabled={!cleanedMatrix}>Gráficos</TabsTrigger>
                 <TabsTrigger value="correlation" disabled={!cleanedMatrix}>Correlação</TabsTrigger>
+                <TabsTrigger value="normal" disabled={!cleanedMatrix}>Distribuição Normal</TabsTrigger>
               </TabsList>
 
               <TabsContent value="types">
@@ -969,6 +1019,155 @@ export default function Home() {
                   {!correlationResult && !regressionResult && (
                     <div className="text-center text-muted-foreground p-8 border rounded-md">
                       <p>Selecione duas colunas numéricas diferentes para calcular a correlação de Pearson e a linha de regressão.</p>
+                    </div>
+                  )}
+                </div>
+              </TabsContent>
+
+              <TabsContent value="normal">
+                <div className="space-y-6 mt-4">
+                  <div className="space-y-4">
+                    <div className="flex flex-wrap items-center gap-4">
+                      <div className="flex items-center gap-2">
+                        <Label htmlFor="weight-column">Coluna Numérica</Label>
+                        <select
+                          id="weight-column"
+                          value={selectedWeightColumn || ""}
+                          onChange={(e) => setSelectedWeightColumn(e.target.value)}
+                          disabled={!cleanedMatrix}
+                          className="w-[200px] px-3 py-2 border border-input bg-background text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 rounded-md"
+                        >
+                          <option value="">Selecione a coluna</option>
+                          {getNumericColumns(cleanedMatrix, headersList).map((col) => (
+                            <option key={col} value={col}>
+                              {col}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        <Label htmlFor="min-range">Mínimo</Label>
+                        <Input
+                          id="min-range"
+                          type="number"
+                          value={minRange}
+                          onChange={(e) => setMinRange(Number(e.target.value))}
+                          className="w-[100px]"
+                          placeholder="400"
+                        />
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        <Label htmlFor="max-range">Máximo</Label>
+                        <Input
+                          id="max-range"
+                          type="number"
+                          value={maxRange}
+                          onChange={(e) => setMaxRange(Number(e.target.value))}
+                          className="w-[100px]"
+                          placeholder="500"
+                        />
+                      </div>
+                      
+                      <Button 
+                        onClick={calculateNormalDistributionForColumn}
+                        disabled={!selectedWeightColumn || isCalculatingNormal}
+                        className="ml-2"
+                      >
+                        {isCalculatingNormal ? "Calculando..." : "Calcular Distribuição Normal"}
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Resultados da Distribuição Normal */}
+                  {normalDistributionResult && (
+                    <div className="space-y-6">
+                      <h3 className="text-lg font-semibold">Análise da Distribuição Normal</h3>
+                      
+                      {/* Estatísticas Básicas */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="rounded-md border p-4">
+                          <div className="text-sm text-muted-foreground">Média</div>
+                          <div className="text-2xl font-bold">{normalDistributionResult.mean.toFixed(2)}</div>
+                        </div>
+                        <div className="rounded-md border p-4">
+                          <div className="text-sm text-muted-foreground">Desvio Padrão</div>
+                          <div className="text-2xl font-bold">{normalDistributionResult.standardDeviation.toFixed(2)}</div>
+                        </div>
+                        <div className="rounded-md border p-4">
+                          <div className="text-sm text-muted-foreground">Total de Dados</div>
+                          <div className="text-2xl font-bold">{normalDistributionResult.totalFish}</div>
+                        </div>
+                      </div>
+
+                      {/* Análise no intervalo especificado */}
+                      <div className="rounded-lg border p-6 bg-blue-50 dark:bg-blue-950">
+                        <h4 className="text-lg font-semibold mb-4">🎯 Análise entre {normalDistributionResult.minRange}-{normalDistributionResult.maxRange}</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <div className="text-sm text-muted-foreground">Dados no intervalo</div>
+                            <div className="text-xl font-bold text-blue-600">
+                              {normalDistributionResult.fishInRange} valores
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <div className="text-sm text-muted-foreground">Percentual Real</div>
+                            <div className="text-xl font-bold text-blue-600">
+                              {normalDistributionResult.percentageInRange.toFixed(2)}%
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Análise Teórica */}
+                      <div className="rounded-lg border p-6 bg-green-50 dark:bg-green-950">
+                        <h4 className="text-lg font-semibold mb-4">📈 Análise Teórica (Distribuição Normal)</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                          <div className="space-y-2">
+                            <div className="text-muted-foreground">Z-score para {normalDistributionResult.minRange}</div>
+                            <div className="font-medium">{normalDistributionResult.zScoreMin.toFixed(3)}</div>
+                          </div>
+                          <div className="space-y-2">
+                            <div className="text-muted-foreground">Z-score para {normalDistributionResult.maxRange}</div>
+                            <div className="font-medium">{normalDistributionResult.zScoreMax.toFixed(3)}</div>
+                          </div>
+                          <div className="space-y-2 md:col-span-2">
+                            <div className="text-muted-foreground">Probabilidade Teórica</div>
+                            <div className="font-medium text-lg text-green-600">
+                              {normalDistributionResult.probabilityInRange.toFixed(2)}%
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Comparação */}
+                      <div className="rounded-lg border p-6 bg-orange-50 dark:bg-orange-950">
+                        <h4 className="text-lg font-semibold mb-4">📋 Comparação</h4>
+                        <div className="space-y-2 text-sm">
+                          <div className="flex justify-between">
+                            <span>Percentual observado:</span>
+                            <span className="font-medium">{normalDistributionResult.percentageInRange.toFixed(2)}%</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Percentual esperado (normal):</span>
+                            <span className="font-medium">{normalDistributionResult.probabilityInRange.toFixed(2)}%</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Diferença:</span>
+                            <span className="font-medium text-orange-600">
+                              {Math.abs(normalDistributionResult.percentageInRange - normalDistributionResult.probabilityInRange).toFixed(2)}%
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Mensagem informativa */}
+                  {!normalDistributionResult && (
+                    <div className="text-center text-muted-foreground p-8 border rounded-md">
+                      <p>Selecione uma coluna numérica e defina o intervalo desejado para calcular a distribuição normal.</p>
                     </div>
                   )}
                 </div>
