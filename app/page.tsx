@@ -79,6 +79,13 @@ export default function Home() {
   const [quantilesResult, setQuantilesResult] = useState<Quantile[] | null>(null)
   const [dispersionResult, setDispersionResult] = useState<any | null>(null)
 
+  // Estados para correlação entre duas colunas
+  const [selectedColumn1, setSelectedColumn1] = useState<string | null>(null)
+  const [selectedColumn2, setSelectedColumn2] = useState<string | null>(null)
+  const [correlationResult, setCorrelationResult] = useState<any | null>(null)
+  const [regressionResult, setRegressionResult] = useState<any | null>(null)
+  const [isCalculatingCorrelation, setIsCalculatingCorrelation] = useState(false)
+
   // Refs for exporting charts as images
   const chartsBarRef = useRef<HTMLDivElement | null>(null)
   const chartsHistRef = useRef<HTMLDivElement | null>(null)
@@ -207,18 +214,22 @@ export default function Home() {
       computeStatsFor(defaultHeader, columnTypes ,cleanedData);
       setCurrentPage(0)
 
-      // PARA TESTE
-      const imdbRating = ExtractColumnFromData(cleanedData, 'IMDb Rating').map((val) => Number(val));
-      const rank = ExtractColumnFromData(cleanedData, 'Rank').map((val) => Number(val));
-      
-      imdbRating.shift();
-      rank.shift();
+      // PARA TESTE - Only run if columns exist
+      if (headers.includes('IMDb Rating') && headers.includes('Rank')) {
+        const imdbRating = ExtractColumnFromData(cleanedData, 'IMDb Rating').map((val) => Number(val));
+        const rank = ExtractColumnFromData(cleanedData, 'Rank').map((val) => Number(val));
+        
+        imdbRating.shift();
+        rank.shift();
 
-      const pearsonCorrelation = await CalculatePearsonCorrelation(imdbRating, rank);
-      console.log('[PEARSON CORRELATION]: ', pearsonCorrelation);
+        const pearsonCorrelation = await CalculatePearsonCorrelation(imdbRating, rank);
+        console.log('[PEARSON CORRELATION]: ', pearsonCorrelation);
 
-      const regressionLine = await CalculateRegressionLine(imdbRating, rank);
-      console.log('[REGRESSION LINE]: ', regressionLine);
+        const regressionLine = await CalculateRegressionLine(imdbRating, rank);
+        console.log('[REGRESSION LINE]: ', regressionLine);
+      } else {
+        console.log('Required columns (IMDb Rating, Rank) not found in data');
+      }
 
       
 
@@ -293,6 +304,41 @@ export default function Home() {
     setChartsPage(0)
   }
 
+  async function calculateCorrelation() {
+    if (!selectedColumn1 || !selectedColumn2 || !cleanedMatrix) {
+      alert('Por favor, selecione duas colunas numéricas')
+      return
+    }
+
+    if (selectedColumn1 === selectedColumn2) {
+      alert('Selecione duas colunas diferentes')
+      return
+    }
+
+    setIsCalculatingCorrelation(true)
+    setCorrelationResult(null)
+    setRegressionResult(null)
+
+    try {
+      const col1Data = ExtractColumnFromData(cleanedMatrix, selectedColumn1).map((val) => Number(val))
+      const col2Data = ExtractColumnFromData(cleanedMatrix, selectedColumn2).map((val) => Number(val))
+      
+      col1Data.shift()
+      col2Data.shift()
+
+      const pearsonCorrelation = await CalculatePearsonCorrelation(col1Data, col2Data)
+      const regressionLine = await CalculateRegressionLine(col1Data, col2Data)
+      
+      setCorrelationResult(pearsonCorrelation)
+      setRegressionResult(regressionLine)
+    } catch (error) {
+      console.error('Erro ao calcular correlação:', error)
+      alert('Erro ao calcular correlação. Verifique se as colunas contêm apenas dados numéricos.')
+    } finally {
+      setIsCalculatingCorrelation(false)
+    }
+  }
+
   function fmt(n?: number) {
     if (n === undefined) return '-'
     else return n
@@ -310,6 +356,14 @@ export default function Home() {
     if (!matrix || !columnName) return [] as number[];
     const col = ExtractColumnFromData(matrix, columnName).slice(1);
     return col.map((v: any) => Number(v)).filter((v: number) => Number.isFinite(v));
+  }
+
+  function getNumericColumns(matrix: any[] | null, headersList: string[] | null) {
+    if (!matrix || !headersList) return [];
+    return headersList.filter(header => {
+      const columnData = ExtractColumnFromData(matrix, header).slice(1);
+      return columnData.length > 0 && !isNaN(Number(columnData[0]));
+    });
   }
 
   function binNumeric(values: number[], bins = 10) {
@@ -456,11 +510,12 @@ export default function Home() {
           <CardContent>
             
             <Tabs defaultValue={tableColumns ? 'data' : 'types'} className="w-full">
-              <TabsList className="grid w-full grid-cols-4">
+              <TabsList className="grid w-full grid-cols-5">
                 <TabsTrigger value="types">Tipos de Variáveis</TabsTrigger>
                 <TabsTrigger value="data" disabled={!tableColumns}>Tabela de Dados</TabsTrigger>
                 <TabsTrigger value="stats" disabled={!frequenciesResult && !centralTrendsResult && !quantilesResult && !dispersionResult}>Estatísticas</TabsTrigger>
                 <TabsTrigger value="charts" disabled={!cleanedMatrix}>Gráficos</TabsTrigger>
+                <TabsTrigger value="correlation" disabled={!cleanedMatrix}>Correlação</TabsTrigger>
               </TabsList>
 
               <TabsContent value="types">
@@ -796,6 +851,125 @@ export default function Home() {
                         );
                       }
                     })()
+                  )}
+                </div>
+              </TabsContent>
+
+              <TabsContent value="correlation">
+                <div className="space-y-6 mt-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="correlation-col1">Primeira Coluna (Numérica)</Label>
+                      <select
+                        id="correlation-col1"
+                        className="border rounded-md px-2 py-1 bg-background w-full"
+                        value={selectedColumn1 ?? ''}
+                        onChange={(e) => setSelectedColumn1(e.target.value)}
+                        disabled={!headersList || headersList.length === 0}
+                      >
+                        <option value="">Selecione uma coluna</option>
+                        {getNumericColumns(cleanedMatrix, headersList).map((h) => (
+                          <option key={h} value={h}>{h}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="correlation-col2">Segunda Coluna (Numérica)</Label>
+                      <select
+                        id="correlation-col2"
+                        className="border rounded-md px-2 py-1 bg-background w-full"
+                        value={selectedColumn2 ?? ''}
+                        onChange={(e) => setSelectedColumn2(e.target.value)}
+                        disabled={!headersList || headersList.length === 0}
+                      >
+                        <option value="">Selecione uma coluna</option>
+                        {getNumericColumns(cleanedMatrix, headersList).map((h) => (
+                          <option key={h} value={h}>{h}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  
+                  <Button 
+                    onClick={calculateCorrelation}
+                    disabled={!selectedColumn1 || !selectedColumn2 || selectedColumn1 === selectedColumn2 || isCalculatingCorrelation}
+                    className="w-full"
+                  >
+                    {isCalculatingCorrelation ? "Calculando..." : "Calcular Correlação e Regressão"}
+                  </Button>
+
+                  {/* Resultados da Correlação */}
+                  {correlationResult && correlationResult.success && (
+                    <div className="space-y-4">
+                      <h3 className="text-lg font-semibold">Resultado da Correlação</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                        <div className="rounded-md border p-3">
+                          <div className="text-muted-foreground">Coeficiente de Pearson (r)</div>
+                          <div className="font-medium text-lg">{correlationResult.value?.toFixed(4) ?? '-'}</div>
+                        </div>
+                        <div className="rounded-md border p-3">
+                          <div className="text-muted-foreground">Força da Correlação</div>
+                          <div className="font-medium">
+                            {correlationResult.type === 'WEAK' ? 'Fraca' :
+                             correlationResult.type === 'MEDIUM' ? 'Moderada' : 'Forte'}
+                          </div>
+                        </div>
+                        <div className="rounded-md border p-3">
+                          <div className="text-muted-foreground">Direção</div>
+                          <div className="font-medium">
+                            {correlationResult.direction === 'positive' ? 'Positiva' : 'Negativa'}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Erro na Correlação */}
+                  {correlationResult && !correlationResult.success && (
+                    <div className="rounded-md border border-red-200 bg-red-50 p-4">
+                      <div className="text-red-800">
+                        <div className="font-medium">Erro na Correlação</div>
+                        <div className="text-sm mt-1">{correlationResult.message}</div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Resultados da Regressão */}
+                  {regressionResult && regressionResult.isValid && (
+                    <div className="space-y-4">
+                      <h3 className="text-lg font-semibold">Linha de Regressão</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                        <div className="rounded-md border p-3">
+                          <div className="text-muted-foreground">Coeficiente Angular (a)</div>
+                          <div className="font-medium">{regressionResult.a?.toFixed(4) ?? '-'}</div>
+                        </div>
+                        <div className="rounded-md border p-3">
+                          <div className="text-muted-foreground">Intercepto (b)</div>
+                          <div className="font-medium">{regressionResult.b?.toFixed(4) ?? '-'}</div>
+                        </div>
+                        <div className="rounded-md border p-3 md:col-span-2">
+                          <div className="text-muted-foreground">Equação da Reta</div>
+                          <div className="font-medium">{regressionResult.equation ?? '-'}</div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Erro na Regressão */}
+                  {regressionResult && !regressionResult.isValid && (
+                    <div className="rounded-md border border-red-200 bg-red-50 p-4">
+                      <div className="text-red-800">
+                        <div className="font-medium">Erro na Regressão</div>
+                        <div className="text-sm mt-1">{regressionResult.message}</div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Mensagem informativa */}
+                  {!correlationResult && !regressionResult && (
+                    <div className="text-center text-muted-foreground p-8 border rounded-md">
+                      <p>Selecione duas colunas numéricas diferentes para calcular a correlação de Pearson e a linha de regressão.</p>
+                    </div>
                   )}
                 </div>
               </TabsContent>
