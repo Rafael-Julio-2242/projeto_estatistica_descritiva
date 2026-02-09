@@ -12,6 +12,7 @@ import CalculateCentralTrends from '@/server/data-analisys/central-trends'
 import CalculateQuantiles from '@/server/data-analisys/quantiles'
 import CalculateDispersion from '@/server/data-analisys/dispersion'
 import calculateNormalDistribution, { formatNormalDistributionResults, type FishData, type NormalDistributionResult } from '@/server/data-analisys/standard-dispersion'
+import calculateBinomialDistribution, { generateSampleData, formatBinomialResults, analyzeSexDistribution, type GenericData, type BinomialDistributionResult } from '@/server/data-analisys/binomial-distribution'
 import type { ColumnFrequencyValue } from '@/server/data-analisys/types'
 import type { Quantile } from '@/server/data-analisys/quantiles'
 import { CalculatePearsonCorrelation } from '@/server/data-analisys/pearson-correlation/pearson-correlation'
@@ -93,6 +94,15 @@ export default function Home() {
   const [isCalculatingNormal, setIsCalculatingNormal] = useState(false)
   const [minRange, setMinRange] = useState<number>(400)
   const [maxRange, setMaxRange] = useState<number>(500)
+
+  // Estado para distribuição binomial
+  const [binomialResult, setBinomialResult] = useState<BinomialDistributionResult | null>(null)
+  const [selectedBinomialColumn, setSelectedBinomialColumn] = useState<string | null>(null)
+  const [isCalculatingBinomial, setIsCalculatingBinomial] = useState(false)
+  const [binomialK, setBinomialK] = useState<number>(0)
+  const [binomialN, setBinomialN] = useState<number>(0)
+  const [binomialP, setBinomialP] = useState<number>(0)
+  const [binomialSituation, setBinomialSituation] = useState<string>('')
 
   // Refs for exporting charts as images
   const chartsBarRef = useRef<HTMLDivElement | null>(null)
@@ -415,6 +425,80 @@ export default function Home() {
     }
   }
 
+  function calculateBinomialDistributionForColumn() {
+    if (!selectedBinomialColumn || !cleanedMatrix) {
+      alert('Por favor, selecione uma coluna para análise binomial.');
+      return;
+    }
+
+    if (binomialK > binomialN) {
+      alert('O número de sucessos (K) não pode ser maior que o total de tentativas (N).');
+      return;
+    }
+
+    if (binomialP < 0 || binomialP > 1) {
+      alert('A probabilidade de sucesso (P) deve estar entre 0 e 1.');
+      return;
+    }
+
+    setIsCalculatingBinomial(true);
+    
+    try {
+      // Extrair dados da coluna
+      const columnData = ExtractColumnFromData(cleanedMatrix, selectedBinomialColumn);
+      const values = columnData.slice(1); // remover header
+      
+      // Converter para formato genérico com type guards
+      const genericData: GenericData[] = values.map(val => {
+        const value = val;
+        
+        // Type guards para evitar sobreposição de tipos
+        if (typeof value === 'boolean') {
+          return { value } as GenericData;
+        } 
+        
+        if (typeof value === 'number') {
+          return { value: value === 1 || value === '1' ? 1 : 0 } as GenericData;
+        } 
+        
+        if (typeof value === 'string') {
+          const lowerValue = String(value).toLowerCase();
+          
+          // Verificar se é um valor booleano como string
+          if (['true', 'sim', 'yes', 'verdadeiro', 'm', 'masculino'].includes(lowerValue)) {
+            return { value: 1 } as GenericData;
+          } else if (['false', 'não', 'no', 'falso', 'f', 'feminino'].includes(lowerValue)) {
+            return { value: 0 } as GenericData;
+          } else {
+            // Para outros casos, tratar como booleano baseado em conteúdo
+            return { value: lowerValue === '' ? 0 : 1 } as GenericData;
+          }
+        }
+        
+        // Para outros tipos, converter número para booleano
+        const numValue = Number(value);
+        if (!isNaN(numValue)) {
+          return { value: numValue > 0 ? 1 : 0 } as GenericData;
+        }
+        
+        // Default para casos não tratados
+        return { value: 0 } as GenericData;
+      });
+      
+      // Calcular distribuição binomial
+      const result = calculateBinomialDistribution(genericData, binomialK, binomialN, binomialP);
+      setBinomialResult(result);
+      
+      console.log('Resultado da distribuição binomial:', result);
+      
+    } catch (error) {
+      console.error('Erro ao calcular distribuição binomial:', error);
+      alert('Ocorreu um erro ao calcular a distribuição binomial.');
+    } finally {
+      setIsCalculatingBinomial(false);
+    }
+  }
+
   function binNumeric(values: number[], bins = 10) {
     if (values.length === 0) return [] as { x0: number; x1: number; count: number }[];
     const min = Math.min(...values);
@@ -559,13 +643,14 @@ export default function Home() {
           <CardContent>
             
             <Tabs defaultValue={tableColumns ? 'data' : 'types'} className="w-full">
-              <TabsList className="grid w-full grid-cols-6">
+              <TabsList className="grid w-full grid-cols-7">
                 <TabsTrigger value="types">Tipos de Variáveis</TabsTrigger>
                 <TabsTrigger value="data" disabled={!tableColumns}>Tabela de Dados</TabsTrigger>
                 <TabsTrigger value="stats" disabled={!frequenciesResult && !centralTrendsResult && !quantilesResult && !dispersionResult}>Estatísticas</TabsTrigger>
                 <TabsTrigger value="charts" disabled={!cleanedMatrix}>Gráficos</TabsTrigger>
                 <TabsTrigger value="correlation" disabled={!cleanedMatrix}>Correlação</TabsTrigger>
                 <TabsTrigger value="normal" disabled={!cleanedMatrix}>Distribuição Normal</TabsTrigger>
+                <TabsTrigger value="binomial" disabled={!cleanedMatrix}>Distribuição Binomial</TabsTrigger>
               </TabsList>
 
               <TabsContent value="types">
@@ -1168,6 +1253,185 @@ export default function Home() {
                   {!normalDistributionResult && (
                     <div className="text-center text-muted-foreground p-8 border rounded-md">
                       <p>Selecione uma coluna numérica e defina o intervalo desejado para calcular a distribuição normal.</p>
+                    </div>
+                  )}
+                </div>
+              </TabsContent>
+
+              <TabsContent value="binomial">
+                <div className="space-y-6 mt-4">
+                  <div className="space-y-4">
+                    <div className="flex flex-wrap items-center gap-4">
+                      <div className="flex items-center gap-2">
+                        <Label htmlFor="binomial-column">Coluna</Label>
+                        <select
+                          id="binomial-column"
+                          value={selectedBinomialColumn || ""}
+                          onChange={(e) => setSelectedBinomialColumn(e.target.value)}
+                          disabled={!cleanedMatrix}
+                          className="w-[200px] px-3 py-2 border border-input bg-background text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 rounded-md"
+                        >
+                          <option value="">Selecione a coluna</option>
+                          {headersList?.map((col) => (
+                            <option key={col} value={col}>
+                              {col}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        <Label htmlFor="binomial-k">Sucessos (K)</Label>
+                        <Input
+                          id="binomial-k"
+                          type="number"
+                          value={binomialK}
+                          onChange={(e) => setBinomialK(Number(e.target.value))}
+                          className="w-[100px]"
+                          placeholder="0"
+                        />
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        <Label htmlFor="binomial-n">Tentativas (N)</Label>
+                        <Input
+                          id="binomial-n"
+                          type="number"
+                          value={binomialN}
+                          onChange={(e) => setBinomialN(Number(e.target.value))}
+                          className="w-[100px]"
+                          placeholder="0"
+                        />
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        <Label htmlFor="binomial-p">Probabilidade (P)</Label>
+                        <Input
+                          id="binomial-p"
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          max="1"
+                          value={binomialP}
+                          onChange={(e) => setBinomialP(Number(e.target.value))}
+                          className="w-[100px]"
+                          placeholder="0"
+                        />
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        <Label htmlFor="binomial-situation">Descrição</Label>
+                        <Input
+                          id="binomial-situation"
+                          value={binomialSituation}
+                          onChange={(e) => setBinomialSituation(e.target.value)}
+                          className="w-[150px]"
+                          placeholder=""
+                        />
+                      </div>
+                      
+                      <Button 
+                        onClick={calculateBinomialDistributionForColumn}
+                        disabled={!selectedBinomialColumn || isCalculatingBinomial}
+                        className="ml-2"
+                      >
+                        {isCalculatingBinomial ? "Calculando..." : "Calcular Distribuição Binomial"}
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Resultados da Distribuição Binomial */}
+                  {binomialResult && (
+                    <div className="space-y-6">
+                      <h3 className="text-lg font-semibold">Análise da Distribuição Binomial</h3>
+                      
+                      {/* Estatísticas Básicas */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="rounded-md border p-4">
+                          <div className="text-sm text-muted-foreground">Total de Tentativas</div>
+                          <div className="text-2xl font-bold">{binomialResult.totalTrials}</div>
+                        </div>
+                        <div className="rounded-md border p-4">
+                          <div className="text-sm text-muted-foreground">Sucessos Desejados</div>
+                          <div className="text-2xl font-bold">{binomialResult.k}</div>
+                        </div>
+                        <div className="rounded-md border p-4">
+                          <div className="text-sm text-muted-foreground">Probabilidade Teórica (P)</div>
+                          <div className="text-2xl font-bold">{(binomialResult.p * 100).toFixed(1)}%</div>
+                        </div>
+                      </div>
+
+                      {/* Resultados Principais */}
+                      <div className="rounded-lg border p-6 bg-blue-50 dark:bg-blue-950">
+                        <h4 className="text-lg font-semibold mb-4">🎯 Análise Principal</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                          <div className="space-y-2">
+                            <div className="text-muted-foreground">Probabilidade exata (K={binomialResult.k})</div>
+                            <div className="font-medium text-lg text-blue-600">
+                              {(binomialResult.probabilityOfExactlyK * 100).toFixed(4)}%
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <div className="text-muted-foreground">Pelo menos K sucessos</div>
+                            <div className="font-medium text-lg text-blue-600">
+                              {(binomialResult.probabilityOfAtLeastK * 100).toFixed(4)}%
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <div className="text-muted-foreground">No máximo K sucessos</div>
+                            <div className="font-medium text-lg text-blue-600">
+                              {(binomialResult.probabilityOfAtMostK * 100).toFixed(4)}%
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Estatísticas da Distribuição */}
+                      <div className="rounded-lg border p-6 bg-green-50 dark:bg-green-950">
+                        <h4 className="text-lg font-semibold mb-4">📈 Estatísticas da Distribuição</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                          <div className="space-y-2">
+                            <div className="text-muted-foreground">Esperado de {binomialSituation}(s)</div>
+                            <div className="font-medium">{binomialResult.expectedNumberOfSuccess.toFixed(2)}</div>
+                          </div>
+                          <div className="space-y-2">
+                            <div className="text-muted-foreground">Variância</div>
+                            <div className="font-medium">{binomialResult.variance.toFixed(4)}</div>
+                          </div>
+                          <div className="space-y-2">
+                            <div className="text-muted-foreground">Desvio Padrão</div>
+                            <div className="font-medium">{Math.sqrt(binomialResult.variance).toFixed(4)}</div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Comparação */}
+                      <div className="rounded-lg border p-6 bg-orange-50 dark:bg-orange-950">
+                        <h4 className="text-lg font-semibold mb-4">🔍 Comparação</h4>
+                        <div className="space-y-2 text-sm">
+                          <div className="flex justify-between">
+                            <span>Probabilidade observada:</span>
+                            <span className="font-medium">{(binomialResult.probabilityOfSuccess * 100).toFixed(2)}%</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Probabilidade teórica:</span>
+                            <span className="font-medium">{(binomialResult.p * 100).toFixed(1)}%</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Diferença:</span>
+                            <span className="font-medium text-orange-600">
+                              {Math.abs(binomialResult.probabilityOfSuccess - binomialResult.p).toFixed(4)}%
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Mensagem informativa */}
+                  {!binomialResult && (
+                    <div className="text-center text-muted-foreground p-8 border rounded-md">
+                      <p>Selecione uma coluna e defina os parâmetros para calcular a distribuição binomial.</p>
                     </div>
                   )}
                 </div>
