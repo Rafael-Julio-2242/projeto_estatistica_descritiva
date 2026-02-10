@@ -133,6 +133,8 @@ export async function CalculatePearsonCorrelation(columnA: number[], columnB: nu
         returnResult.type = PearsonCorrelationType.STRONG;
     }
 
+    console.log('[PEARSON RESULT]: ', returnResult);
+
     return returnResult;
 }
 

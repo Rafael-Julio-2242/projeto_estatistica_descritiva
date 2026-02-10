@@ -88,6 +88,10 @@ export default function Home() {
   const [regressionResult, setRegressionResult] = useState<any | null>(null)
   const [isCalculatingCorrelation, setIsCalculatingCorrelation] = useState(false)
 
+  // Estado para previsão (Regressão)
+  const [predictionX, setPredictionX] = useState<string>('')
+  const [predictionY, setPredictionY] = useState<number | null>(null)
+
   // Estado para distribuição normal
   const [normalDistributionResult, setNormalDistributionResult] = useState<NormalDistributionResult | null>(null)
   const [selectedWeightColumn, setSelectedWeightColumn] = useState<string | null>(null)
@@ -336,6 +340,8 @@ export default function Home() {
     setIsCalculatingCorrelation(true)
     setCorrelationResult(null)
     setRegressionResult(null)
+    setPredictionX('')
+    setPredictionY(null)
 
     try {
       const col1Data = ExtractColumnFromData(cleanedMatrix, selectedColumn1).map((val) => Number(val))
@@ -355,6 +361,18 @@ export default function Home() {
     } finally {
       setIsCalculatingCorrelation(false)
     }
+  }
+
+  function calculatePrediction() {
+    if (!regressionResult || !regressionResult.isValid || predictionX === '') return
+    const x = Number(predictionX)
+    if (isNaN(x)) {
+      alert('Por favor, insira um valor numérico válido para X')
+      return
+    }
+    // y = ax + b
+    const y = (regressionResult.a * x) + regressionResult.b
+    setPredictionY(y)
   }
 
   function fmt(n?: number) {
@@ -457,7 +475,7 @@ export default function Home() {
           return { value } as GenericData;
         } 
         
-        if (typeof value === 'number') {
+        if (typeof value === 'number' || value === '1') {
           return { value: value === 1 || value === '1' ? 1 : 0 } as GenericData;
         } 
         
@@ -1045,8 +1063,8 @@ export default function Home() {
                         <div className="rounded-md border p-3">
                           <div className="text-muted-foreground">Força da Correlação</div>
                           <div className="font-medium">
-                            {correlationResult.type === 'WEAK' ? 'Fraca' :
-                             correlationResult.type === 'MEDIUM' ? 'Moderada' : 'Forte'}
+                            {correlationResult.type === 0 ? 'Fraca' :
+                             correlationResult.type === 1 ? 'Moderada' : 'Forte'}
                           </div>
                         </div>
                         <div className="rounded-md border p-3">
@@ -1086,6 +1104,30 @@ export default function Home() {
                           <div className="text-muted-foreground">Equação da Reta</div>
                           <div className="font-medium">{regressionResult.equation ?? '-'}</div>
                         </div>
+                      </div>
+
+                      <div className="rounded-md border p-4 bg-muted/10">
+                        <h4 className="text-sm font-semibold mb-3">Previsão de Y</h4>
+                        <div className="flex items-end gap-3">
+                          <div className="space-y-2">
+                            <Label htmlFor="prediction-x">Valor de X</Label>
+                            <Input 
+                              id="prediction-x" 
+                              type="number" 
+                              value={predictionX} 
+                              onChange={(e) => setPredictionX(e.target.value)}
+                              placeholder="Digite X..."
+                              className="w-32"
+                            />
+                          </div>
+                          <Button onClick={calculatePrediction}>Calcular</Button>
+                        </div>
+                        {predictionY !== null && (
+                          <div className="mt-3 text-sm">
+                            <span className="text-muted-foreground">Y previsto: </span>
+                            <span className="font-bold text-lg">{predictionY.toFixed(4)}</span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}
