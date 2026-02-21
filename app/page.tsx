@@ -214,7 +214,21 @@ export default function Home() {
 
     const dataArray = JsonToDataArray(json)
     
+    // Validar se há dados antes de processar
+    if (!dataArray || dataArray.length === 0) {
+      alert('O arquivo está vazio ou não contém dados válidos')
+      setIsLoading(false)
+      return
+    }
+    
     const { cleanedData, columnTypes } = await InitialTreatment(dataArray);
+    
+    // Validar se o processamento retornou dados
+    if (!cleanedData || cleanedData.length === 0) {
+      alert('Não foi possível processar os dados. Verifique se o arquivo contém dados válidos.')
+      setIsLoading(false)
+      return
+    }
     
     setResults(() => columnTypes as ColumnType[] || []);
 
@@ -298,8 +312,8 @@ export default function Home() {
     setFrequenciesResult(frequencies)
 
 
-    // TODO Aqui tem que calcular a moda pra coisas que não são numéricas também.
-    // TODO Ta convertendo coisa que não é numérica em número, fazendo retornar NaN em alguns casos
+    // TODO Aqui tem que calcular a moda pra coisas que nao sao numericas tambem.
+    // TODO Ta convertendo coisa que nao e numerica em numero, fazendo retornar NaN em alguns casos
     if (isNumeric) {
       const numericValues = values.map((v: any) => Number(v))
       const central = CalculateCentralTrends(numericValues)
@@ -309,10 +323,10 @@ export default function Home() {
       const disp = CalculateDispersion(numericValues)
       setDispersionResult(disp)
     } else {
-      // Para variáveis não numéricas, não calcular quantis/disp.
+      // Para variaveis nao numericas, nao calcular quantis/disp.
       setQuantilesResult(null)
       setDispersionResult(null)
-      // Para tendências centrais, evitamos NaN; exibiremos apenas moda via frequências na UI (com fallback '-')
+      // Para tendencias centrais, evitamos NaN; exibiremos apenas moda via frequencias na UI (com fallback '-')
       const central = CalculateCentralTrends(values)
 
       console.log('[NON NUMERIC CENTRAL TRENDS]: ', central);
@@ -437,7 +451,7 @@ export default function Home() {
       
     } catch (error) {
       console.error('Erro ao calcular distribuição normal:', error);
-      alert('Oc orreu um erro ao calcular a distribuição normal.');
+      alert('Ocorreu um erro ao calcular a distribuição normal.');
     } finally {
       setIsCalculatingNormal(false);
     }
@@ -485,7 +499,7 @@ export default function Home() {
           // Verificar se é um valor booleano como string
           if (['true', 'sim', 'yes', 'verdadeiro', 'm', 'masculino'].includes(lowerValue)) {
             return { value: 1 } as GenericData;
-          } else if (['false', 'não', 'no', 'falso', 'f', 'feminino'].includes(lowerValue)) {
+          } else if (['false', 'nao', 'no', 'falso', 'f', 'feminino'].includes(lowerValue)) {
             return { value: 0 } as GenericData;
           } else {
             // Para outros casos, tratar como booleano baseado em conteúdo
