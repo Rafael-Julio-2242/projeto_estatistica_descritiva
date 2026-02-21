@@ -20,6 +20,10 @@ export interface ColumnType {
 }
 
 export default function DefineColumnsTypes(data: any[][]) {
+    // Validar se há dados suficientes para análise
+    if (!data || data.length < 2 || !data[0] || !data[1]) {
+        return [];
+    }
 
     const columnTypes: ColumnType[] = []
 

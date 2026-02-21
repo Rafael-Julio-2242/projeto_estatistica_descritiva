@@ -8,6 +8,10 @@
 // ]
 
 export default function DataCleaning(data: any[][]) {
+    // Validar se há dados para limpar
+    if (!data || data.length === 0) {
+        return [];
+    }
     
     const cleanedData = data.filter((row) => {
         return row.every((value) => value !== "" && value !== undefined && value !== null)
